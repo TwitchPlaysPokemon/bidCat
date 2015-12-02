@@ -103,19 +103,67 @@ def main():
 class AuctionsysTester(unittest.TestCase):
 	def testBids(self):
 		auction.place_bid("bob", "pepsiman", 1)
-		self.assertEqual(auction.process_bids()["allBids"],[("bob","pepsiman",1)])
+		bids = auction.process_bids()["allBids"]
+		self.assertEqual(bids,[("bob","pepsiman",1)])
+
 		auction.place_bid("alice", "katamari", 2)
-		print(auction.process_bids())
+		bids = auction.process_bids()["allBids"]
+		self.assertEqual(bids,[("bob","pepsiman",1),("alice","katamari",2)])
+
+		#if another bid has the same user_id as previously seen, don't add a new bid
 		auction.place_bid("bob", "pepsiman", 2)
-		auction.process_bids()
+		bids = auction.process_bids()["allBids"]
+		self.assertEqual(bids,[("bob","pepsiman",2),("alice","katamari",2)])
 
 	def testIncrementalBidding(self):
 		auction.place_bid("bob", "pepsiman", 100)
 		auction.place_bid("alice", "katamari", 2)
 		result = auction.process_bids()
+		#Bob should pay 1 more than the next-lowest bid of 2
 		self.assertEqual(result["winningBid"]["totalCost"],3)
+
+	def testWinning(self):
+		auction.place_bid("bob", "pepsiman", 3)
+		auction.place_bid("alice", "katamari", 2)
+		result = auction.process_bids()
+		self.assertEqual(result["winningBid"]["winningItem"],"pepsiman")
 		
+		#new bids should override previous wins
+		auction.place_bid("chase", "unfinished_battle", 5)
+		auction.place_bid("alice", "katamari", 4)
+		result = auction.process_bids()
+		self.assertEqual(result["winningBid"]["winningItem"],"unfinished_battle")
+
+		#if a new bid is equal to the winner, the winning item shouldn't change
+		auction.place_bid("alice", "katamari", 5)
+		result = auction.process_bids()
+		self.assertEqual(result["winningBid"]["winningItem"],"unfinished_battle")
 		
 
+	def testCollaborative(self):
+		auction.place_bid("bob", "pepsiman", 1)
+		auction.place_bid("alice", "katamari", 3)
+		auction.place_bid("cirno", "unfinished_battle", 1) #sorry; couldn't think of a good c-name
+		result = auction.process_bids()
+		self.assertEqual(result["winningBid"]["winningItem"],"katamari")
+		
+		#ties shouldn't change the winner
+		auction.place_bid("deku", "unfinished_battle", 2)
+		result = auction.process_bids()
+		self.assertEqual(result["winningBid"]["winningItem"],"katamari")
+
+		#chase's 1 + deku's 3=4, so the winner should change
+		auction.place_bid("deku", "unfinished_battle", 3)
+		result = auction.process_bids()
+		self.assertEqual(result["winningBid"]["winningItem"],"unfinished_battle")
+		self.assertEqual(result["winningBid"]["totalCost"],4)
+
+		#bids are up-to bids, so the total cost should still be 3+1=4
+		auction.place_bid("eve", "unfinished_battle", 1)
+		result = auction.process_bids()
+		self.assertEqual(result["winningBid"]["totalCost"],4)
+		#deku should still owe 3 tokens to be nice to people with 1 token
+		
+		#todo: test result["winningBid"]["bids"], which should be a list of all bids for the winning item
 if __name__ == "__main__":
 	main()
