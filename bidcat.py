@@ -74,7 +74,14 @@ class Auction(object):
         Returns:
             dict containing information about what happened and the new state of the auction.
         """
-        return {"hello": "world"}
+        return {
+		"winningBid": {
+			"winningItem":"pepsiman",
+			"totalCost":1,
+			"bids":[]
+			},
+		"allBids":[]
+		}
 
 
 def main():
