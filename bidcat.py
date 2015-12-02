@@ -36,6 +36,9 @@ class Auction(object):
 		#list to keep track of bids
 		self.bids = []
 
+	def clear(self):
+		self.bids = []
+
 	def register_reserved_money_checker(self):
 		"""Adds the reserved money checker function at the bank.
 
@@ -56,9 +59,14 @@ class Auction(object):
 		"""Calculate the amount of money a user has tied up in the auction system.
 
 		It is guaranteed that no more than this amount will be taken from the
-		user's account without furthur action from this user.
+		user's account without further action from this user.
 		"""
-		return 0
+		total=0
+		for bid in self.bids:
+			user,item,maxamt = bid
+			if user == user_id:
+				total += maxamt
+		return total
 
 	def place_bid(self, user_id, item_id, max_bid):
 		if max_bid <= 0:
@@ -71,7 +79,16 @@ class Auction(object):
 		if max_bid > available_money + reserved_money:
 			raise InsufficientMoneyError("can't afford to make bid")
 
+		#check that we're not replacing a bid
+		for bid in self.bids:
+			user,item,maxamt = bid
+			if (user == user_id) and (item == item_id):
+				#remove the old bid; adding the replacement bid happens at the same .append() as if the bid was new
+				self.bids.remove(bid)
+				break
+
 		self.bids.append((user_id,item_id,max_bid))
+		#self.log.debug(str(user_id)+" placed bid for "+str(item_id)+": "+str(max_bid))
 
 	def process_bids(self):
 		"""Process everyone's bids and make any changes.
@@ -79,6 +96,7 @@ class Auction(object):
 		Returns:
 			dict containing information about what happened and the new state of the auction.
 		"""
+
 		return {
 		"winningBid": {
 			"winningItem":"pepsiman",
@@ -100,8 +118,9 @@ def main():
 	unittest.main()
 	auction.deregister_reserved_money_checker()
 
-class AuctionsysTester(unittest.TestCase):
-	def testBids(self):
+class Auctionsys_tester(unittest.TestCase):
+	def test_bids(self):
+		auction.clear()
 		auction.place_bid("bob", "pepsiman", 1)
 		bids = auction.process_bids()["allBids"]
 		self.assertEqual(bids,[("bob","pepsiman",1)])
@@ -110,25 +129,27 @@ class AuctionsysTester(unittest.TestCase):
 		bids = auction.process_bids()["allBids"]
 		self.assertEqual(bids,[("bob","pepsiman",1),("alice","katamari",2)])
 
-		#if another bid has the same user_id as previously seen, don't add a new bid
+		#if another bid has the same user_id and item_id as previously seen, remove the old bid
 		auction.place_bid("bob", "pepsiman", 2)
 		bids = auction.process_bids()["allBids"]
-		self.assertEqual(bids,[("bob","pepsiman",2),("alice","katamari",2)])
+		self.assertEqual(bids,[("alice","katamari",2),("bob","pepsiman",2)])
 
-	def testIncrementalBidding(self):
+	def test_incremental_bidding(self):
+		auction.clear()
 		auction.place_bid("bob", "pepsiman", 100)
 		auction.place_bid("alice", "katamari", 2)
 		result = auction.process_bids()
 		#Bob should pay 1 more than the next-lowest bid of 2
 		self.assertEqual(result["winningBid"]["totalCost"],3)
 
-	def testWinning(self):
+	def test_winning(self):
+		auction.clear()
 		auction.place_bid("bob", "pepsiman", 3)
 		auction.place_bid("alice", "katamari", 2)
 		result = auction.process_bids()
 		self.assertEqual(result["winningBid"]["winningItem"],"pepsiman")
 		
-		#new bids should override previous wins
+		#new bids for the same item should override previous wins
 		auction.place_bid("chase", "unfinished_battle", 5)
 		auction.place_bid("alice", "katamari", 4)
 		result = auction.process_bids()
@@ -140,7 +161,8 @@ class AuctionsysTester(unittest.TestCase):
 		self.assertEqual(result["winningBid"]["winningItem"],"unfinished_battle")
 		
 
-	def testCollaborative(self):
+	def test_collaborative(self):
+		auction.clear()
 		auction.place_bid("bob", "pepsiman", 1)
 		auction.place_bid("alice", "katamari", 3)
 		auction.place_bid("cirno", "unfinished_battle", 1) #sorry; couldn't think of a good c-name
@@ -163,7 +185,20 @@ class AuctionsysTester(unittest.TestCase):
 		result = auction.process_bids()
 		self.assertEqual(result["winningBid"]["totalCost"],4)
 		#deku should still owe 3 tokens to be nice to people with 1 token
-		
+
 		#todo: test result["winningBid"]["bids"], which should be a list of all bids for the winning item
+
+	def test_reserved(self):
+		auction.clear()
+		auction.place_bid("bob", "peach", 4)
+		auction.place_bid("cirno", "peach", 9)
+		auction.place_bid("alice", "yoshi", 3)
+
+		self.assertEqual(auction.get_reserved_money("alice"),3)
+		self.assertEqual(auction.get_reserved_money("bob"),4)
+		self.assertEqual(auction.get_reserved_money("cirno"),9)
+		#If not in the system yet, there should be no money reserved
+		self.assertEqual(auction.get_reserved_money("deku"),0)
+
 if __name__ == "__main__":
 	main()
