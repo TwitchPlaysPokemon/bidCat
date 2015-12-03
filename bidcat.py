@@ -225,30 +225,6 @@ class Auctionsys_tester(unittest.TestCase):
 		self.assertEqual(auction.get_reserved_money("cirno"),9)
 		#If not in the system yet, there should be no money reserved
 		self.assertEqual(auction.get_reserved_money("deku"),0)
-
-	def testCollaborative(self):
-		auction.place_bid("bob", "pepsiman", 1)
-		auction.place_bid("alice", "katamari", 3)
-		auction.place_bid("cirno", "unfinished_battle", 1) #sorry; couldn't think of a good c-name
-		result = auction.process_bids()
-		self.assertEqual(result["winningBid"]["winningItem"],"katamari")
-		
-		#ties shouldn't change the winner
-		auction.place_bid("deku", "unfinished_battle", 2)
-		result = auction.process_bids()
-		self.assertEqual(result["winningBid"]["winningItem"],"katamari")
-
-		#cirno's 1 + deku's 3=4, so the winner should change
-		auction.place_bid("deku", "unfinished_battle", 3)
-		result = auction.process_bids()
-		self.assertEqual(result["winningBid"]["winningItem"],"unfinished_battle")
-		self.assertEqual(result["winningBid"]["totalCost"],4)
-
-		#bids are up-to bids, so the total cost should still be 3+1=4
-		auction.place_bid("eve", "unfinished_battle", 1)
-		result = auction.process_bids()
-		self.assertEqual(result["winningBid"]["totalCost"],4)
-		#deku should still owe 3 tokens to be nice to people with 1 token
 		
 		#todo: test result["winningBid"]["bids"], which should be a list of all bids for the winning item
 if __name__ == "__main__":
