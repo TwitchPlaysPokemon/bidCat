@@ -97,28 +97,40 @@ class Auction(object):
 			dict containing information about what happened and the new state of the auction.
 		"""
 
-		winningItem = None
-		maxCost = -1
+		highest_bid_item = (None,-1) #item_id, total money bid on this item
+		second_highest_item = (None,-1)
 		#todo: perhaps store self.bids indexed by item_id?
 
-		itemInfo = {}
+		bids_for_item = {}
+		item_cost = {}
 		for bid in self.bids:
 			user,item_id,bidamt = bid
-			if item_id not in itemInfo:
-				itemInfo[item_id] = [0,[]]
-			itemInfo[item_id][0] += bidamt #add to total
-			itemInfo[item_id][1].append(bid)
-			#see if the total is the highest, for collaborative bidding
-			if itemInfo[item_id][0] > maxCost:
-				maxCost = itemInfo[item_id][0]
-				winningItem = item_id
+			if item_id not in bids_for_item:
+				bids_for_item[item_id] = []
+				item_cost[item_id] = 0
+			item_cost[item_id] += bidamt
+			bids_for_item[item_id].append(bid)
+
+			#Now, keep track of the highest bid and the 2nd highest bid; the cost will be the 2nd highest bid amt + 1
+			if item_cost[item_id] > highest_bid_item[1]:
+				second_highest_item = highest_bid_item
+				highest_bid_item = (item_id,item_cost[item_id])
+			elif item_cost[item_id] > second_highest_item[1]:
+				second_highest_item = (item_id,item_cost[item_id])
 				
+		winningItem = highest_bid_item[0]
+		totalCost = second_highest_item[1]+1 #winner only bids 1 more than they must
+
+		#well, unless there was only 1 bid, or if two bids tie (in which case the chronologically first bid wins).
+		if(len(self.bids) == 1) or (highest_bid_item[1] == second_highest_item[1]): 
+			totalCost = highest_bid_item[1]
+		
 
 		return {
 		"winningBid": {
 			"winningItem":winningItem,
-			"totalCost":maxCost,
-			"bids":itemInfo[winningItem][1]
+			"totalCost":totalCost,
+			"bids":bids_for_item[winningItem]
 			},
 		"allBids":self.bids,
 		"allEvents":[]
@@ -169,6 +181,19 @@ class Auctionsys_tester(unittest.TestCase):
 		result = auction.process_bids()
 		self.assertEqual(result["winningBid"]["totalCost"],6)
 		self.assertEqual(result["winningBid"]["winningItem"],"pepsiman")
+
+		#If there's only 1 bid, they should pay the amt they bid
+		auction.clear()
+		auction.place_bid("bob", "pepsiman", 100)
+		result = auction.process_bids()
+		self.assertEqual(result["winningBid"]["totalCost"],100)
+		self.assertEqual(result["winningBid"]["winningItem"],"pepsiman")
+
+		#ties shouldn't change the winner
+		auction.place_bid("deku", "unfinished_battle", 100)
+		result = auction.process_bids()
+		self.assertEqual(result["winningBid"]["winningItem"],"pepsiman")
+		self.assertEqual(result["winningBid"]["totalCost"],100)
 
 
 	def test_winning(self):
