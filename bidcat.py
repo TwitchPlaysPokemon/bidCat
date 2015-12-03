@@ -97,10 +97,27 @@ class Auction(object):
 			dict containing information about what happened and the new state of the auction.
 		"""
 
+		winningItem = None
+		maxCost = -1
+		#todo: perhaps store self.bids indexed by item_id?
+
+		itemInfo = {}
+		for bid in self.bids:
+			user,item_id,bidamt = bid
+			if item_id not in itemInfo:
+				itemInfo[item_id] = [0,[]]
+			itemInfo[item_id][0] += bidamt #add to total
+			itemInfo[item_id][1].append(bid)
+			#see if the total is the highest, for collaborative bidding
+			if itemInfo[item_id][0] > maxCost:
+				maxCost = itemInfo[item_id][0]
+				winningItem = item_id
+				
+
 		return {
 		"winningBid": {
-			"winningItem":"pepsiman",
-			"totalCost":1,
+			"winningItem":winningItem,
+			"totalCost":maxCost,
 			"bids":[]
 			},
 		"allBids":self.bids,
@@ -138,9 +155,20 @@ class Auctionsys_tester(unittest.TestCase):
 		auction.clear()
 		auction.place_bid("bob", "pepsiman", 100)
 		auction.place_bid("alice", "katamari", 2)
+
 		result = auction.process_bids()
 		#Bob should pay 1 more than the next-lowest bid of 2
 		self.assertEqual(result["winningBid"]["totalCost"],3)
+
+		#now, test it with collaboration
+		auction.clear()
+		auction.place_bid("bob", "pepsiman", 4)
+		auction.place_bid("alice", "katamari", 5)
+		auction.place_bid("cirno", "pepsiman", 4) #sorry; couldn't think of a good c-name
+
+		result = auction.process_bids()
+		self.assertEqual(result["winningBid"]["totalCost"],6)
+		self.assertEqual(result["winningBid"]["winningItem"],"pepsiman")
 
 
 	def test_winning(self):
@@ -151,7 +179,7 @@ class Auctionsys_tester(unittest.TestCase):
 		self.assertEqual(result["winningBid"]["winningItem"],"pepsiman")
 
 		#new bids for the same item should override previous wins
-		auction.place_bid("chase", "unfinished_battle", 5)
+		auction.place_bid("cirno", "unfinished_battle", 5)
 		auction.place_bid("alice", "katamari", 4)
 		result = auction.process_bids()
 		self.assertEqual(result["winningBid"]["winningItem"],"unfinished_battle")
@@ -167,7 +195,8 @@ class Auctionsys_tester(unittest.TestCase):
 		auction.clear()
 		auction.place_bid("bob", "pepsiman", 1)
 		auction.place_bid("alice", "katamari", 3)
-		auction.place_bid("cirno", "unfinished_battle", 1) #sorry; couldn't think of a good c-name
+		auction.place_bid("cirno", "unfinished_battle", 1)
+
 		result = auction.process_bids()
 		self.assertEqual(result["winningBid"]["winningItem"],"katamari")
 		
@@ -176,17 +205,12 @@ class Auctionsys_tester(unittest.TestCase):
 		result = auction.process_bids()
 		self.assertEqual(result["winningBid"]["winningItem"],"katamari")
 
-		#chase's 1 + deku's 3=4, so the winner should change
+		#cirno's 1 + deku's 3=4, so the winner should change
 		auction.place_bid("deku", "unfinished_battle", 3)
 		result = auction.process_bids()
+		print(result["allBids"])
 		self.assertEqual(result["winningBid"]["winningItem"],"unfinished_battle")
 		self.assertEqual(result["winningBid"]["totalCost"],4)
-
-		#bids are up-to bids, so the total cost should still be 3+1=4
-		auction.place_bid("eve", "unfinished_battle", 1)
-		result = auction.process_bids()
-		self.assertEqual(result["winningBid"]["totalCost"],4)
-		#deku should still owe 3 tokens to be nice to people with 1 token
 
 		#todo: test result["winningBid"]["bids"], which should be a list of all bids for the winning item
 
@@ -214,7 +238,7 @@ class Auctionsys_tester(unittest.TestCase):
 		result = auction.process_bids()
 		self.assertEqual(result["winningBid"]["winningItem"],"katamari")
 
-		#chase's 1 + deku's 3=4, so the winner should change
+		#cirno's 1 + deku's 3=4, so the winner should change
 		auction.place_bid("deku", "unfinished_battle", 3)
 		result = auction.process_bids()
 		self.assertEqual(result["winningBid"]["winningItem"],"unfinished_battle")
