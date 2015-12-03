@@ -88,7 +88,7 @@ class Auction(object):
 				break
 
 		self.bids.append((user_id,item_id,max_bid))
-		#self.log.debug(str(user_id)+" placed bid for "+str(item_id)+": "+str(max_bid))
+		self.log.debug(str(user_id)+" placed bid for "+str(item_id)+": "+str(max_bid))
 
 	def process_bids(self):
 		"""Process everyone's bids and make any changes.
@@ -126,6 +126,8 @@ class Auction(object):
 			total_cost = highest_bid_item[1]
 		
 
+		self.log.debug("Processed bids; winning item is "+str(winning_item)+", total cost is "+str(total_cost))
+
 		return {
 		"winning_bid": {
 			"winning_item":winning_item,
@@ -133,14 +135,13 @@ class Auction(object):
 			"bids":bids_for_item[winning_item]
 			},
 		"all_bids":self.bids,
-		"all_events":[]
 		}
 
 
 def main():
 	global auction
 	from banksys import DummyBank
-	logging.basicConfig(level=logging.DEBUG)
+	logging.basicConfig(level=logging.INFO)
 	bank = DummyBank()
 	auction = Auction(bank=bank)
 	auction.register_reserved_money_checker()
@@ -233,7 +234,6 @@ class AuctionsysTester(unittest.TestCase):
 		#cirno's 1 + deku's 3=4, so the winner should change
 		auction.place_bid("deku", "unfinished_battle", 3)
 		result = auction.process_bids()
-		print(result["all_bids"])
 		self.assertEqual(result["winning_bid"]["winning_item"],"unfinished_battle")
 		self.assertEqual(result["winning_bid"]["total_cost"],4)
 
@@ -250,7 +250,23 @@ class AuctionsysTester(unittest.TestCase):
 		self.assertEqual(auction.get_reserved_money("cirno"),9)
 		#If not in the system yet, there should be no money reserved
 		self.assertEqual(auction.get_reserved_money("deku"),0)
-		
-		#todo: test result["winning_bid"]["bids"], which should be a list of all bids for the winning item
+
+	def test_winning_bids(self):
+		auction.clear()
+		auction.place_bid("cirno", "pepsiman", 2)
+		auction.place_bid("alice", "katamari", 2)
+		auction.place_bid("bob", "pepsiman", 4)
+		auction.place_bid("deku", "unfinished_battle", 3)
+		#some bids get upgraded
+		auction.place_bid("alice", "katamari", 5)
+		auction.place_bid("cirno", "pepsiman", 4)
+
+		result = auction.process_bids()
+		self.assertEqual(result["winning_bid"]["winning_item"],"pepsiman")
+
+		for bid in result["winning_bid"]["bids"]:
+			self.assertEqual(bid[1], result["winning_bid"]["winning_item"])
+
+
 if __name__ == "__main__":
 	main()
