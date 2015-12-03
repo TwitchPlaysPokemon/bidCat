@@ -118,7 +118,7 @@ class Auction(object):
 		"winningBid": {
 			"winningItem":winningItem,
 			"totalCost":maxCost,
-			"bids":[]
+			"bids":itemInfo[winningItem][1]
 			},
 		"allBids":self.bids,
 		"allEvents":[]
