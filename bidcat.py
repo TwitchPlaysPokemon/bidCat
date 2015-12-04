@@ -76,13 +76,20 @@ class Auction(object):
 		reserved_money = self.bank.get_reserved_money(user_id)
 		# TODO: consider how much is reserved by previous bids existence' on this item
 		# determine amount of money spent on this
-		if max_bid > available_money + reserved_money:
+		if max_bid > available_money:
+			self.log.info((max_bid,available_money,reserved_money))
 			raise InsufficientMoneyError("can't afford to make bid")
 
 		#check that we're not replacing a bid
 		for bid in self.bids:
-			user,item,maxamt = bid
+			user,item,prev_bid_amt = bid
 			if (user == user_id) and (item == item_id):
+				new_amt_needed = max_bid - prev_bid_amt
+				print(new_amt_needed)
+				if new_amt_needed > available_money:
+					self.log.info((max_bid,available_money,reserved_money))
+					raise InsufficientMoneyError("can't afford to make bid")
+
 				#remove the old bid; adding the replacement bid happens at the same .append() as if the bid was new
 				self.bids.remove(bid)
 				break

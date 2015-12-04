@@ -1,5 +1,7 @@
 import unittest
+import logging
 from bidcat import Auction
+from banksys import InsufficientMoneyError
 
 class AuctionsysTester(unittest.TestCase):
 	def test_bids(self):
@@ -90,8 +92,6 @@ class AuctionsysTester(unittest.TestCase):
 		self.assertEqual(result["winning_bid"]["winning_item"],"unfinished_battle")
 		self.assertEqual(result["winning_bid"]["total_cost"],4)
 
-		#todo: test result["winning_bid"]["bids"], which should be a list of all bids for the winning item
-
 	def test_reserved(self):
 		auction.clear()
 		auction.place_bid("bob", "peach", 4)
@@ -121,10 +121,41 @@ class AuctionsysTester(unittest.TestCase):
 			self.assertEqual(bid[1], result["winning_bid"]["winning_item"])
 
 	def test_insufficient_money(self):
+		auction.clear()
+		#give alice 100 money
+		bank = auction.bank
+		bank._adjust_stored_money_value('alice',-bank._starting_amount)
+		bank._adjust_stored_money_value('alice',100)
+		self.assertEqual(bank.get_total_money('alice'),100)
+
+		auction.place_bid("alice", "katamari", 66)
+		auction.place_bid("alice", "unfinished_battle", 34)
+		
+		self.assertEqual(auction.get_reserved_money("alice"),100)
+
+		try:
+			auction.place_bid("alice", "pepsiman", 1)
+			self.assertEqual("No InsufficientMoneyError raised",0)
+		except InsufficientMoneyError:
+			pass
+
+		#test raising a previous bid past the mark
+		auction.clear()
+		auction.place_bid("alice", "katamari", 66)
+		auction.place_bid("alice", "unfinished_battle", 34)
+
+		self.assertEqual(auction.get_reserved_money("alice"),100)
+		try:
+			auction.place_bid("alice", "unfinished_battle", 35)
+			self.assertEqual("No InsufficientMoneyError raised",0)
+		except InsufficientMoneyError:
+			pass
+
+	def test_collaborative_allotting(self):
 		self.assertEqual(1,0) #todo: implement
 
-	def test_collaborative_owing(self):
-		self.assertEqual(1,0) #todo: implement
+	def test_winning_bids(self):
+		self.assertEqual(1,0) #todo: test result["winning_bid"]["bids"], which should be a list of all bids for the winning item
 
 if __name__ == "__main__":
 	global auction
