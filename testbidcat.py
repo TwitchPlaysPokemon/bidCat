@@ -157,7 +157,6 @@ class AuctionsysTester(unittest.TestCase):
 		auction.place_bid("eve", "katamari", 4)
 
 		result = auction.process_bids()
-		print(result)
 		self.assertEqual(result["winning_bid"]["total_cost"],5)
 		self.assertEqual(result["winning_bid"]["amounts_owed"],{"alice":1,"bob":2,"cirno":1,"deku":1})
 

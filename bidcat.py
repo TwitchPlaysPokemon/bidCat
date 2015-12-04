@@ -120,7 +120,8 @@ class Auction(object):
 
 			#Now, keep track of the highest bid and the 2nd highest bid; the cost will be the 2nd highest bid amt + 1
 			if item_cost[item_id] > highest_bid_item[1]:
-				second_highest_item = highest_bid_item
+				if item_id != highest_bid_item[0]: #if we're making the highest bid bigger, don't make the same item both first and 2nd
+					second_highest_item = highest_bid_item
 				highest_bid_item = (item_id,item_cost[item_id])
 			elif item_cost[item_id] > second_highest_item[1]:
 				second_highest_item = (item_id,item_cost[item_id])
@@ -144,7 +145,7 @@ class Auction(object):
 		for bid in sortedbids:
 			alloting[bid[0]] = 0
 
-		while allotted < total_cost: #This loop is inefficient for big 
+		while allotted < total_cost: #This loop is inefficient for big bids; todo: make more efficient?
 			user_id,item,bid_amt = sortedbids[bid_number]
 			if alloting[user_id] < bid_amt:
 				alloting[user_id] += 1
