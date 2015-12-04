@@ -2,9 +2,10 @@
 
 Each user places bids on items by telling the auction system the most they're willing to bid and
 have the system automatically bid on their behalf with the intent of securing the lowest price
-possible, for example, if Alice bids 100 on "Item A" and Bob bids 1 on "Item B" Alice should win and pay 2.
+possible, for example, if Alice bids 100 on "Item A" and Bob bids 1 on "Item B" Alice wins and pay 2.
 
-Multiple users able to bid on the same item with their combined bids beating an overall smaller single bid.
+Multiple users able to bid on the same item with their combined bids beating an overall smaller single bid. 
+When this happens, the system will compute how many tokens to deduct from each user.
 
 All references to "money" in this module refers to an arbitrary indivisible integer unit of currency.
 
@@ -14,7 +15,6 @@ User IDs are strings or integers.
 """
 
 import logging
-import unittest
 
 from banksys import InsufficientMoneyError
 
@@ -37,6 +37,7 @@ class Auction(object):
 		self.bids = []
 
 	def clear(self):
+		"""Clear all stored bids. After calling this, self.get_reserved_money() will also be reset to 0 for every user"""
 		self.bids = []
 
 	def register_reserved_money_checker(self):
@@ -69,15 +70,16 @@ class Auction(object):
 		return total
 
 	def place_bid(self, user_id, item_id, max_bid):
+		"""Place a bid for the given item_id, max_bid, and user_id.
+
+		Will raise an InsufficientMoneyError if the user_id does not have enough bank balance to make that bid.
+		"""
 		if max_bid <= 0:
 			raise ValueError("'max_bid' must be a value above 0")
 		# ensure the user can afford it
 		available_money = self.bank.get_available_money(user_id)
 		reserved_money = self.bank.get_reserved_money(user_id)
-		# TODO: consider how much is reserved by previous bids existence' on this item
-		# determine amount of money spent on this
 		if max_bid > available_money:
-			self.log.info((max_bid,available_money,reserved_money))
 			raise InsufficientMoneyError("can't afford to make bid")
 
 		#check that we're not replacing a bid
@@ -85,7 +87,6 @@ class Auction(object):
 			user,item,prev_bid_amt = bid
 			if (user == user_id) and (item == item_id):
 				new_amt_needed = max_bid - prev_bid_amt
-				print(new_amt_needed)
 				if new_amt_needed > available_money:
 					self.log.info((max_bid,available_money,reserved_money))
 					raise InsufficientMoneyError("can't afford to make bid")
@@ -101,12 +102,20 @@ class Auction(object):
 		"""Process everyone's bids and make any changes.
 
 		Returns:
-			dict containing information about what happened and the new state of the auction.
+			dict containing info about the new state of the auction and the current winner.
+			{
+			"winning_bid": {
+				"winning_item": the item that is currently winning
+				"total_cost": the sum of the bids for that item
+				"bids": an array containing tuples of (user_id,item,amt_bid) with item==winning item
+				"amounts_owed": dict mapping user_id to the computed money they will pay
+				},
+			"all_bids": dict containing all (user_id, item, amt_bid) tuples for all items
+			}
 		"""
 
 		highest_bid_item = (None,-1) #item_id, total money bid on this item
 		second_highest_item = (None,-1)
-		#todo: perhaps store self.bids indexed by item_id?
 
 		bids_for_item = {}
 		item_cost = {}
@@ -118,9 +127,10 @@ class Auction(object):
 			item_cost[item_id] += bidamt
 			bids_for_item[item_id].append(bid)
 
-			#Now, keep track of the highest bid and the 2nd highest bid; the cost will be the 2nd highest bid amt + 1
+			#Now, keep track of the highest bid and the 2nd highest bid
 			if item_cost[item_id] > highest_bid_item[1]:
-				if item_id != highest_bid_item[0]: #if we're making the highest bid bigger, don't make the same item both first and 2nd
+				#The same item shouldn't be both first and 2nd highest
+				if item_id != highest_bid_item[0]:
 					second_highest_item = highest_bid_item
 				highest_bid_item = (item_id,item_cost[item_id])
 			elif item_cost[item_id] > second_highest_item[1]:
@@ -132,20 +142,19 @@ class Auction(object):
 		#well, unless there was only 1 bid, or if two bids tie (in which case the chronologically first bid wins).
 		if(len(self.bids) == 1) or (highest_bid_item[1] == second_highest_item[1]): 
 			total_cost = highest_bid_item[1]
-		
 
-		#Now, compute who pays what
+		#Now, compute who pays what using everyone-owes-equally
 		sortedbids = sorted(bids_for_item[winning_item],key=lambda bid:bid[2],reverse=True)
-		amt_users = len(sortedbids)
-		allotted = 0
-		bid_number = 0
 
 		alloting = {}
 		#start by making each person owe 0 tokens
 		for bid in sortedbids:
 			alloting[bid[0]] = 0
 
-		while allotted < total_cost: #This loop is inefficient for big bids; todo: make more efficient?
+		allotted = 0
+		bid_number = 0
+		amt_users = len(sortedbids)
+		while allotted < total_cost: #This loop is inefficient for big bids (>1000)
 			user_id,item,bid_amt = sortedbids[bid_number]
 			if alloting[user_id] < bid_amt:
 				alloting[user_id] += 1

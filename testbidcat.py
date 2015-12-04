@@ -174,7 +174,10 @@ class AuctionsysTester(unittest.TestCase):
 		result = auction.process_bids()
 		finish = datetime.datetime.now()
 		milliseconds = (finish-start).microseconds / 1000
-		self.assertTrue(milliseconds < 10) #the current implementation's run time grows very quickly, there probably shouldn't be over 2000 tokens ever so if it's less than 10ms it's probably OK
+		#this test is intended to be a realistic worst case scenario for bidding
+		#the current implementation's run time grows very quickly for large bids
+		#so if it's less than 10ms for over 3000 tokens in play it's probably OK
+		self.assertTrue(milliseconds < 10)
 
 if __name__ == "__main__":
 	global auction
