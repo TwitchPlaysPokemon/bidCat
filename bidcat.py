@@ -133,13 +133,33 @@ class Auction(object):
 			total_cost = highest_bid_item[1]
 		
 
+		#Now, compute who pays what
+		sortedbids = sorted(bids_for_item[winning_item],key=lambda bid:bid[2],reverse=True)
+		amt_users = len(sortedbids)
+		allotted = 0
+		bid_number = 0
+
+		alloting = {}
+		#start by making each person owe 0 tokens
+		for bid in sortedbids:
+			alloting[bid[0]] = 0
+
+		while allotted < total_cost: #This loop is inefficient for big 
+			user_id,item,bid_amt = sortedbids[bid_number]
+			if alloting[user_id] < bid_amt:
+				alloting[user_id] += 1
+				allotted += 1
+			bid_number = (bid_number+1)%amt_users
+		
+
 		self.log.debug("Processed bids; winning item is "+str(winning_item)+", total cost is "+str(total_cost))
 
 		return {
 		"winning_bid": {
 			"winning_item":winning_item,
 			"total_cost":total_cost,
-			"bids":bids_for_item[winning_item]
+			"bids":bids_for_item[winning_item],
+			"amounts_owed":alloting
 			},
 		"all_bids":self.bids,
 		}

@@ -2,10 +2,13 @@ import unittest
 import logging
 from bidcat import Auction
 from banksys import InsufficientMoneyError
+import datetime
 
 class AuctionsysTester(unittest.TestCase):
-	def test_bids(self):
+	def setUp(self):
 		auction.clear()
+
+	def test_bids(self):
 		auction.place_bid("bob", "pepsiman", 1)
 		bids = auction.process_bids()["all_bids"]
 		self.assertEqual(bids,[("bob","pepsiman",1)])
@@ -20,7 +23,6 @@ class AuctionsysTester(unittest.TestCase):
 		self.assertEqual(bids,[("alice","katamari",2),("bob","pepsiman",2)])
 
 	def test_incremental_bidding(self):
-		auction.clear()
 		auction.place_bid("bob", "pepsiman", 100)
 		auction.place_bid("alice", "katamari", 2)
 
@@ -53,7 +55,6 @@ class AuctionsysTester(unittest.TestCase):
 
 
 	def test_winning(self):
-		auction.clear()
 		auction.place_bid("bob", "pepsiman", 3)
 		auction.place_bid("alice", "katamari", 2)
 		result = auction.process_bids()
@@ -73,7 +74,6 @@ class AuctionsysTester(unittest.TestCase):
 		
 
 	def test_collaborative(self):
-		auction.clear()
 		auction.place_bid("bob", "pepsiman", 1)
 		auction.place_bid("alice", "katamari", 3)
 		auction.place_bid("cirno", "unfinished_battle", 1)
@@ -93,7 +93,6 @@ class AuctionsysTester(unittest.TestCase):
 		self.assertEqual(result["winning_bid"]["total_cost"],4)
 
 	def test_reserved(self):
-		auction.clear()
 		auction.place_bid("bob", "peach", 4)
 		auction.place_bid("cirno", "peach", 9)
 		auction.place_bid("alice", "yoshi", 3)
@@ -105,7 +104,6 @@ class AuctionsysTester(unittest.TestCase):
 		self.assertEqual(auction.get_reserved_money("deku"),0)
 
 	def test_winning_bids(self):
-		auction.clear()
 		auction.place_bid("cirno", "pepsiman", 2)
 		auction.place_bid("alice", "katamari", 2)
 		auction.place_bid("bob", "pepsiman", 4)
@@ -121,7 +119,6 @@ class AuctionsysTester(unittest.TestCase):
 			self.assertEqual(bid[1], result["winning_bid"]["winning_item"])
 
 	def test_insufficient_money(self):
-		auction.clear()
 		#give alice 100 money
 		bank = auction.bank
 		bank._adjust_stored_money_value('alice',-bank._starting_amount)
@@ -152,10 +149,33 @@ class AuctionsysTester(unittest.TestCase):
 			pass
 
 	def test_collaborative_allotting(self):
-		self.assertEqual(1,0) #todo: implement
+		auction.place_bid("alice", "pepsiman", 1)
+		auction.place_bid("bob", "pepsiman", 4)
+		auction.place_bid("cirno", "pepsiman", 2)
+		auction.place_bid("deku", "pepsiman", 2)
 
-	def test_winning_bids(self):
-		self.assertEqual(1,0) #todo: test result["winning_bid"]["bids"], which should be a list of all bids for the winning item
+		auction.place_bid("eve", "katamari", 4)
+
+		result = auction.process_bids()
+		print(result)
+		self.assertEqual(result["winning_bid"]["total_cost"],5)
+		self.assertEqual(result["winning_bid"]["amounts_owed"],{"alice":1,"bob":2,"cirno":1,"deku":1})
+
+	def test_big_bids_collaborative_allotting(self):
+		auction.place_bid("alice", "pepsiman", 1000)
+		auction.place_bid("bob", "pepsiman", 1000)
+		auction.place_bid("cirno", "pepsiman", 100)
+		auction.place_bid("deku", "pepsiman", 100)
+		auction.place_bid("eve", "pepsiman", 100)
+		auction.place_bid("flareon", "pepsiman", 1000)
+		auction.place_bid("geforcefly", "pepsiman", 1)
+		auction.place_bid("hlixed", "pepsiman", 1)
+		#measure time to process
+		start = datetime.datetime.now()
+		result = auction.process_bids()
+		finish = datetime.datetime.now()
+		milliseconds = (finish-start).microseconds / 1000
+		self.assertTrue(milliseconds < 10) #the current implementation's run time grows very quickly, there probably shouldn't be over 2000 tokens ever so if it's less than 10ms it's probably OK
 
 if __name__ == "__main__":
 	global auction
