@@ -179,6 +179,43 @@ class AuctionsysTester(unittest.TestCase):
 		#so if it's less than 10ms for over 3000 tokens in play it's probably OK
 		self.assertTrue(milliseconds < 10)
 
+	def test_counterbids(self):
+		auction.place_bid("alice", "pepsiman", 3)
+		auction.place_bid("bob", "katamari", 4)
+		auction.place_counterbid("cirno", "katamari", 2)
+		#auction.place_counterbid("cirno", "unfinished_battle", 2)
+
+		self.assertEqual(auction.get_reserved_money("cirno"),2) #can place multiple counterbids
+
+		result = auction.process_bids()
+		self.assertEqual(result["winning_bid"]["winning_item"],"pepsiman")
+		self.assertEqual(result["winning_bid"]["total_cost"],3)
+
+	def test_counterbids_owing(self):
+		auction.place_bid("alice", "pepsiman", 3)
+		auction.place_bid("bob", "katamari", 4)
+		auction.place_counterbid("cirno", "katamari", 2)
+		auction.place_counterbid("deku", "unfinished_battle", 2)
+
+		result = auction.process_bids()
+
+		self.assertEqual(result["winning_bid"]["amounts_owed"]["alice"],3)
+		self.assertEqual(result["winning_bid"]["amounts_owed"]["cirno"],2)
+		self.assertEqual(result["winning_bid"]["amounts_owed"]["deku"],2)
+
+	def test_counterbids_outweighing_bids(self):
+		auction.place_bid("bob", "katamari", 2)
+		auction.place_counterbid("cirno", "katamari", 4)
+		
+		result = auction.process_bids()
+
+		#If there's no alternatives, the system gives the winner to the bidder and makes them pay nothing
+		#This incentivizes bidding on an alternative instead of just blindly shutting down
+
+		self.assertEqual(result["winning_bid"]["amounts_owed"]["bob"],0)
+		self.assertEqual(result["winning_bid"]["amounts_owed"]["cirno"],2) #not 4
+		self.assertEqual(result["winning_bid"]["winning_item"],"katamari")
+
 if __name__ == "__main__":
 	global auction
 	from banksys import DummyBank
