@@ -16,7 +16,7 @@ User IDs are strings or integers.
 
 import logging
 
-from banksys import InsufficientMoneyError
+from .banksys import InsufficientMoneyError
 
 
 class Auction(object):
