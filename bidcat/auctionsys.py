@@ -17,7 +17,10 @@ User IDs are strings or integers.
 import logging
 
 from .banksys import InsufficientMoneyError
+from collections import namedtuple
 
+
+Bid = namedtuple("Bid", ["user_id", "item_id", "max_bid"])
 
 class Auction(object):
 	"""Handles multiple users bidding on multiple items, only one item can win.
@@ -64,9 +67,8 @@ class Auction(object):
 		"""
 		total=0
 		for bid in self.bids:
-			user,item,maxamt = bid
-			if user == user_id:
-				total += maxamt
+			if bid.user_id == user_id:
+				total += bid.max_bid
 		return total
 
 	def place_bid(self, user_id, item_id, max_bid):
@@ -83,8 +85,8 @@ class Auction(object):
 		#check if we're replacing a bid
 		for bid in self.bids:
 			user,item,prev_bid_amt = bid
-			if (user == user_id) and (item == item_id):
-				new_amt_needed = max_bid - prev_bid_amt
+			if (bid.user_id == user_id) and (bid.item_id == item_id):
+				new_amt_needed = max_bid - bid.max_bid
 				if new_amt_needed > available_money:
 					self.log.info((max_bid,available_money,reserved_money))
 					raise InsufficientMoneyError("can't afford to make bid")
@@ -97,7 +99,7 @@ class Auction(object):
 			if max_bid > available_money:
 				raise InsufficientMoneyError("can't afford to make bid")
 
-		self.bids.append((user_id,item_id,max_bid))
+		self.bids.append(Bid(user_id, item_id, max_bid))
 		self.log.debug(str(user_id)+" placed bid for "+str(item_id)+": "+str(max_bid))
 
 	def process_bids(self):
@@ -109,7 +111,7 @@ class Auction(object):
 			"winning_bid": {
 				"winning_item": the item that is currently winning
 				"total_cost": the sum of the bids for that item
-				"bids": an array containing tuples of (user_id,item,amt_bid) with item==winning item
+				"bids": an array containing namedtuples of (user_id, item_id, max_bid) with item==winning item
 				"amounts_owed": dict mapping user_id to the computed money they will pay
 				},
 			"all_bids": dict containing all (user_id, item, amt_bid) tuples for all items
@@ -122,21 +124,20 @@ class Auction(object):
 		bids_for_item = {}
 		item_cost = {}
 		for bid in self.bids:
-			user,item_id,bidamt = bid
-			if item_id not in bids_for_item:
-				bids_for_item[item_id] = []
-				item_cost[item_id] = 0
-			item_cost[item_id] += bidamt
-			bids_for_item[item_id].append(bid)
+			if bid.item_id not in bids_for_item:
+				bids_for_item[bid.item_id] = []
+				item_cost[bid.item_id] = 0
+			item_cost[bid.item_id] += bid.max_bid
+			bids_for_item[bid.item_id].append(bid)
 
 			#Now, keep track of the highest bid and the 2nd highest bid
-			if item_cost[item_id] > highest_bid_item[1]:
+			if item_cost[bid.item_id] > highest_bid_item[1]:
 				#The same item shouldn't be both first and 2nd highest
-				if item_id != highest_bid_item[0]:
+				if bid.item_id != highest_bid_item[0]:
 					second_highest_item = highest_bid_item
-				highest_bid_item = (item_id,item_cost[item_id])
-			elif item_cost[item_id] > second_highest_item[1]:
-				second_highest_item = (item_id,item_cost[item_id])
+				highest_bid_item = (bid.item_id,item_cost[bid.item_id])
+			elif item_cost[bid.item_id] > second_highest_item[1]:
+				second_highest_item = (bid.item_id,item_cost[bid.item_id])
 				
 		winning_item = highest_bid_item[0]
 		total_cost = second_highest_item[1]+1 #winner only bids 1 more than they must
