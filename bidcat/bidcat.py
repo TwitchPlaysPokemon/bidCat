@@ -76,13 +76,11 @@ class Auction(object):
 		"""
 		if max_bid <= 0:
 			raise ValueError("'max_bid' must be a value above 0")
-		# ensure the user can afford it
+		
 		available_money = self.bank.get_available_money(user_id)
 		reserved_money = self.bank.get_reserved_money(user_id)
-		if max_bid > available_money:
-			raise InsufficientMoneyError("can't afford to make bid")
 
-		#check that we're not replacing a bid
+		#check if we're replacing a bid
 		for bid in self.bids:
 			user,item,prev_bid_amt = bid
 			if (user == user_id) and (item == item_id):
@@ -94,6 +92,10 @@ class Auction(object):
 				#remove the old bid; adding the replacement bid happens at the same .append() as if the bid was new
 				self.bids.remove(bid)
 				break
+		else:
+			# It's a new bid
+			if max_bid > available_money:
+				raise InsufficientMoneyError("can't afford to make bid")
 
 		self.bids.append((user_id,item_id,max_bid))
 		self.log.debug(str(user_id)+" placed bid for "+str(item_id)+": "+str(max_bid))

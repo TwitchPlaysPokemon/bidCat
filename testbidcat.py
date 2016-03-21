@@ -183,6 +183,16 @@ class AuctionsysTester(unittest.TestCase):
 		#the current implementation's run time grows very quickly for large bids
 		#so if it's less than 10ms for over 3000 tokens in play it's probably OK
 		self.assertTrue(milliseconds < 10)
+		
+	def test_overwrite_bid(self):
+		# 50k money at start
+		self.auction.place_bid("alice", "pepsiman", 30000)
+		self.auction.place_bid("alice", "pepsiman", 40000)
+		result = self.auction.process_bids()
+		# User should be able to increase a bid on the same item, even though both bids would be too expensive together
+		self.assertEqual(result["winning_bid"]["total_cost"], 40000)
+		self.assertEqual(result["winning_bid"]["winning_item"], "pepsiman")
+		self.assertEqual(len(result["all_bids"]), 1)
 
 if __name__ == "__main__":
 	logging.basicConfig(level=logging.INFO)
