@@ -192,6 +192,11 @@ class AuctionsysTester(unittest.TestCase):
 		self.assertEqual(result["winning_bid"]["total_cost"], money)
 		self.assertEqual(result["winning_bid"]["winning_item"], "pepsiman")
 		self.assertEqual(len(result["all_bids"]), 1)
+		
+	def test_no_bids(self):
+		result = self.auction.process_bids()
+		self.assertEqual(result["winnind_bid"], None)
+		self.assertEqual(result["all_bids"], [])
 
 if __name__ == "__main__":
 	logging.basicConfig(level=logging.INFO)
