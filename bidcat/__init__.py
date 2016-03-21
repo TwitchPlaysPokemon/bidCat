@@ -1,3 +1,3 @@
 
-from .bidcat import *
+from .auctionsys import *
 from .banksys import *

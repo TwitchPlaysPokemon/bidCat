@@ -185,12 +185,12 @@ class AuctionsysTester(unittest.TestCase):
 		self.assertTrue(milliseconds < 10)
 		
 	def test_overwrite_bid(self):
-		# 50k money at start
-		self.auction.place_bid("alice", "pepsiman", 30000)
-		self.auction.place_bid("alice", "pepsiman", 40000)
+		money = self.bank._starting_amount
+		self.auction.place_bid("alice", "pepsiman", money//2)
+		self.auction.place_bid("alice", "pepsiman", money)
 		result = self.auction.process_bids()
 		# User should be able to increase a bid on the same item, even though both bids would be too expensive together
-		self.assertEqual(result["winning_bid"]["total_cost"], 40000)
+		self.assertEqual(result["winning_bid"]["total_cost"], money)
 		self.assertEqual(result["winning_bid"]["winning_item"], "pepsiman")
 		self.assertEqual(len(result["all_bids"]), 1)
 
