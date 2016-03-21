@@ -5,7 +5,7 @@ import datetime
 
 class AuctionsysTester(unittest.TestCase):
 	def setUp(self):
-		from .banksys import DummyBank
+		from banksys import DummyBank
 		self.bank = DummyBank()
 		self.auction = Auction(bank=self.bank)
 		self.auction.register_reserved_money_checker()

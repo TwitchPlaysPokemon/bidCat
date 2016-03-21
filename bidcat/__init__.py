@@ -16,7 +16,6 @@ User IDs are strings or integers.
 
 import logging
 
-from .banksys import InsufficientMoneyError
 from collections import namedtuple
 
 Bid = namedtuple("Bid", ["user_id", "item_id", "max_bid"])
