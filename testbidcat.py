@@ -195,7 +195,7 @@ class AuctionsysTester(unittest.TestCase):
 		
 	def test_no_bids(self):
 		result = self.auction.process_bids()
-		self.assertEqual(result["winnind_bid"], None)
+		self.assertEqual(result["winning_bid"], None)
 		self.assertEqual(result["all_bids"], [])
 
 if __name__ == "__main__":

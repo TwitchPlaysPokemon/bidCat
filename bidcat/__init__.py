@@ -115,6 +115,7 @@ class Auction(object):
                 },
             "all_bids": dict containing all (user_id, item, amt_bid) tuples for all items
             }
+            If no bids have been placed, "winning_bid" will be None.
         """
 
         highest_bid_item = (None,-1) #item_id, total money bid on this item
@@ -144,6 +145,13 @@ class Auction(object):
         #well, unless there was only 1 bid, or if two bids tie (in which case the chronologically first bid wins).
         if(len(self.bids) == 1) or (highest_bid_item[1] == second_highest_item[1]): 
             total_cost = highest_bid_item[1]
+
+        #If there aren't any bids, then there aren't any bids for the winning item, either.
+        if winning_item == None:
+            return {
+                "winning_bid": None,
+                "all_bids":self.bids,
+            }
 
         #Now, compute who pays what using everyone-owes-equally
         sortedbids = sorted(bids_for_item[winning_item],key=lambda bid:bid[2],reverse=True)
