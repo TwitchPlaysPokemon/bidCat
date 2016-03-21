@@ -3,9 +3,7 @@ from datetime import datetime
 from collections import namedtuple, defaultdict
 
 
-class InsufficientMoneyError(Exception): pass
 class AccountNotFound(Exception): pass
-
 
 class BaseBank(object):
     def __init__(self):

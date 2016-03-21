@@ -1,12 +1,11 @@
 import unittest
 import logging
-from bidcat import Auction
-from bidcat import InsufficientMoneyError
+from bidcat import Auction, InsufficientMoneyError
 import datetime
 
 class AuctionsysTester(unittest.TestCase):
 	def setUp(self):
-		from bidcat import DummyBank
+		from .banksys import DummyBank
 		self.bank = DummyBank()
 		self.auction = Auction(bank=self.bank)
 		self.auction.register_reserved_money_checker()
