@@ -45,11 +45,11 @@ class AuctionsysTester(unittest.TestCase):
 		self.assertEqual(result["winning_bid"]["total_cost"],6)
 		self.assertEqual(result["winning_bid"]["winning_item"],"pepsiman")
 
-		#If there's only 1 bid, they should pay the amt they bid
+		#If there's only 1 bid, they should pay 1
 		self.auction.clear()
 		self.auction.place_bid("bob", "pepsiman", 100)
 		result = self.auction.process_bids()
-		self.assertEqual(result["winning_bid"]["total_cost"],100)
+		self.assertEqual(result["winning_bid"]["total_cost"],1)
 		self.assertEqual(result["winning_bid"]["winning_item"],"pepsiman")
 
 		#ties shouldn't change the winner
@@ -165,9 +165,9 @@ class AuctionsysTester(unittest.TestCase):
 		self.assertEqual(result["winning_bid"]["amounts_owed"],{"alice":1,"bob":2,"cirno":1,"deku":1})
 
 	def test_big_bids_collaborative_allotting(self):
-		self.auction.place_bid("alice", "pepsiman", 1000)
+		self.auction.place_bid("alice", "katamari", 1000)
 		self.auction.place_bid("bob", "pepsiman", 1000)
-		self.auction.place_bid("cirno", "pepsiman", 100)
+		self.auction.place_bid("cirno", "pepsiman", 1000)
 		self.auction.place_bid("deku", "pepsiman", 100)
 		self.auction.place_bid("eve", "pepsiman", 100)
 		self.auction.place_bid("flareon", "pepsiman", 1000)
@@ -187,11 +187,19 @@ class AuctionsysTester(unittest.TestCase):
 		money = self.bank._starting_amount
 		self.auction.place_bid("alice", "pepsiman", money//2)
 		self.auction.place_bid("alice", "pepsiman", money)
+		self.auction.place_bid("bob", "katamari", money-1) #force the price up
 		result = self.auction.process_bids()
-		# User should be able to increase a bid on the same item, even though both bids would be too expensive together
+		# Alice should be able to increase a bid on the same item, even though both bids would be too expensive together
 		self.assertEqual(result["winning_bid"]["total_cost"], money)
 		self.assertEqual(result["winning_bid"]["winning_item"], "pepsiman")
-		self.assertEqual(len(result["all_bids"]), 1)
+		self.assertEqual(len(result["all_bids"]), 2) #and not 3
+
+	def test_one_bidder(self):
+		self.auction.place_bid("felk", "pepsiman", 1)
+		self.auction.place_bid("felk", "pepsiman", 10)
+		result = self.auction.process_bids()
+		self.assertEqual(result["winning_bid"]["winning_item"], "pepsiman")
+		self.assertEqual(result["winning_bid"]["total_cost"], 1)
 		
 	def test_no_bids(self):
 		result = self.auction.process_bids()
