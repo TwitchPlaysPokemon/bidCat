@@ -118,35 +118,36 @@ class Auction(object):
             If no bids have been placed, "winning_bid" will be None.
         """
 
-        highest_bid_item = (None,-1) #item_id, total money bid on this item
-        second_highest_item = (None,-1)
+        highest_bid_item = (None,0) #item_id, total money bid on this item
+        second_highest_item = (None,0) 
 
-        bids_for_item = {}
-        item_cost = {}
+        bids_for_item = {} # dict of {item_id: [bid_for_item_id, another_bid_for_item_id...]}
+        item_cost = {} # dict of {item_id: total_money_bidded_for_item} 
+
+        #Sum up the bids for each item to figure out the total amount of money spent on each item
         for bid in self.bids:
             if bid.item_id not in bids_for_item:
                 bids_for_item[bid.item_id] = []
                 item_cost[bid.item_id] = 0
             item_cost[bid.item_id] += bid.max_bid
+            #Also keep track of which bids are for which item
             bids_for_item[bid.item_id].append(bid)
 
             #Now, keep track of the highest bid and the 2nd highest bid
             if item_cost[bid.item_id] > highest_bid_item[1]:
                 #The same item shouldn't be both first and 2nd highest
-                if bid.item_id != highest_bid_item[0]:
+                if (highest_bid_item[0] is not None) and (bid.item_id != highest_bid_item[0]):
                     second_highest_item = highest_bid_item
                 highest_bid_item = (bid.item_id,item_cost[bid.item_id])
+            #if we have a new second-highest item, fix it
             elif item_cost[bid.item_id] > second_highest_item[1]:
                 second_highest_item = (bid.item_id,item_cost[bid.item_id])
                 
         winning_item = highest_bid_item[0]
         total_cost = second_highest_item[1]+1 #winner only bids 1 more than they must
 
-        #well, unless there was only 1 bid, in which case the winner pays 1
-        if(len(self.bids) == 1):
-            total_cost = 1
-        #and if two bids tie, the chronologically first bid wins.
-        elif(highest_bid_item[1] == second_highest_item[1]): 
+        #If two bids tie, the chronologically first bid wins.
+        if(highest_bid_item[1] == second_highest_item[1]):
             total_cost = highest_bid_item[1]
 
         #If there aren't any bids, then there aren't any bids for the winning item, either.
