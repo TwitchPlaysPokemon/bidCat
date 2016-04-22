@@ -19,6 +19,7 @@ import logging
 from collections import namedtuple
 
 Bid = namedtuple("Bid", ["user_id", "item_id", "max_bid"])
+ItemTotal = namedtuple("Bid", ["item_id", "total_bidded"])
 class InsufficientMoneyError(Exception): pass
 
 class Auction(object):
@@ -109,7 +110,8 @@ class Auction(object):
             {
             "winning_bid": {
                 "winning_item": the item that is currently winning
-                "total_cost": the sum of the bids for that item
+                "total_cost": the sum of the bids for that item. Also how much is necessary to outbid.
+                "total_charge": How much, in total the winning bidders are being charged
                 "bids": an array containing namedtuples of (user_id, item_id, max_bid) with item==winning item
                 "amounts_owed": dict mapping user_id to the computed money they will pay
                 },
@@ -118,8 +120,8 @@ class Auction(object):
             If no bids have been placed, "winning_bid" will be None.
         """
 
-        highest_bid_item = (None,0) #item_id, total money bid on this item
-        second_highest_item = (None,0) 
+        highest_bid_item = ItemTotal(None,0)
+        second_highest_item = ItemTotal(None,0) 
 
         bids_for_item = {} # dict of {item_id: [bid_for_item_id, another_bid_for_item_id...]}
         item_cost = {} # dict of {item_id: total_money_bidded_for_item} 
@@ -134,21 +136,26 @@ class Auction(object):
             bids_for_item[bid.item_id].append(bid)
 
             #Now, keep track of the highest bid and the 2nd highest bid
-            if item_cost[bid.item_id] > highest_bid_item[1]:
+            if item_cost[bid.item_id] > highest_bid_item.total_bidded:
                 #The same item shouldn't be both first and 2nd highest
-                if (highest_bid_item[0] is not None) and (bid.item_id != highest_bid_item[0]):
+                if (highest_bid_item.item_id is not None) and (bid.item_id != highest_bid_item.item_id):
                     second_highest_item = highest_bid_item
-                highest_bid_item = (bid.item_id,item_cost[bid.item_id])
+                highest_bid_item = ItemTotal(bid.item_id,item_cost[bid.item_id])
             #if we have a new second-highest item, fix it
-            elif item_cost[bid.item_id] > second_highest_item[1]:
-                second_highest_item = (bid.item_id,item_cost[bid.item_id])
+            elif item_cost[bid.item_id] > second_highest_item.total_bidded:
+                second_highest_item = ItemTotal(bid.item_id,item_cost[bid.item_id])
                 
-        winning_item = highest_bid_item[0]
-        total_cost = second_highest_item[1]+1 #winner only bids 1 more than they must
+        winning_item = highest_bid_item.item_id
+        total_charge = second_highest_item.total_bidded+1 #winner only bids 1 more than they must
+
+        #grab the total cost
+        total_cost = 0
+        if highest_bid_item.item_id is not None:
+            total_cost = item_cost[highest_bid_item.item_id]
 
         #If two bids tie, the chronologically first bid wins.
-        if(highest_bid_item[1] == second_highest_item[1]):
-            total_cost = highest_bid_item[1]
+        if(highest_bid_item.total_bidded == second_highest_item.total_bidded):
+            total_charge = highest_bid_item.total_bidded
 
         #If there aren't any bids, then there aren't any bids for the winning item, either.
         if winning_item == None:
@@ -168,7 +175,7 @@ class Auction(object):
         allotted = 0
         bid_number = 0
         amt_users = len(sortedbids)
-        while allotted < total_cost: #This loop is inefficient for big bids (>1000)
+        while allotted < total_charge: #This loop is inefficient for big bids (>1000)
             user_id,item,bid_amt = sortedbids[bid_number]
             if alloting[user_id] < bid_amt:
                 alloting[user_id] += 1
@@ -176,11 +183,12 @@ class Auction(object):
             bid_number = (bid_number+1)%amt_users
         
 
-        self.log.debug("Processed bids; winning item is "+str(winning_item)+", total cost is "+str(total_cost))
+        self.log.debug("Processed bids; winning item is "+str(winning_item)+", total cost is "+str(total_cost)+", total charge is "+str(total_charge))
 
         return {
         "winning_bid": {
             "winning_item":winning_item,
+            "total_charge":total_charge,
             "total_cost":total_cost,
             "bids":bids_for_item[winning_item],
             "amounts_owed":alloting

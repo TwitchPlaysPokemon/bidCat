@@ -33,7 +33,7 @@ class AuctionsysTester(unittest.TestCase):
 
 		result = self.auction.process_bids()
 		#Bob should pay 1 more than the next-lowest bid of 2
-		self.assertEqual(result["winning_bid"]["total_cost"],3)
+		self.assertEqual(result["winning_bid"]["total_charge"],3)
 
 		#now, test it with collaboration
 		self.auction.clear()
@@ -42,14 +42,14 @@ class AuctionsysTester(unittest.TestCase):
 		self.auction.place_bid("cirno", "pepsiman", 4) #sorry; couldn't think of a good c-name
 
 		result = self.auction.process_bids()
-		self.assertEqual(result["winning_bid"]["total_cost"],6)
+		self.assertEqual(result["winning_bid"]["total_charge"],6)
 		self.assertEqual(result["winning_bid"]["winning_item"],"pepsiman")
 
 		#If there's only 1 bid, they should pay 1
 		self.auction.clear()
 		self.auction.place_bid("bob", "pepsiman", 100)
 		result = self.auction.process_bids()
-		self.assertEqual(result["winning_bid"]["total_cost"],1)
+		self.assertEqual(result["winning_bid"]["total_charge"],1)
 		self.assertEqual(result["winning_bid"]["winning_item"],"pepsiman")
 
 		#ties shouldn't change the winner
@@ -161,7 +161,7 @@ class AuctionsysTester(unittest.TestCase):
 		self.auction.place_bid("eve", "katamari", 4)
 
 		result = self.auction.process_bids()
-		self.assertEqual(result["winning_bid"]["total_cost"],5)
+		self.assertEqual(result["winning_bid"]["total_charge"],5)
 		self.assertEqual(result["winning_bid"]["amounts_owed"],{"alice":1,"bob":2,"cirno":1,"deku":1})
 
 	def test_big_bids_collaborative_allotting(self):
@@ -187,10 +187,11 @@ class AuctionsysTester(unittest.TestCase):
 		money = self.bank._starting_amount
 		self.auction.place_bid("alice", "pepsiman", money//2)
 		self.auction.place_bid("alice", "pepsiman", money)
-		self.auction.place_bid("bob", "katamari", money-1) #force the price up
+		self.auction.place_bid("bob", "katamari",  money//2+10) #force the price up
 		result = self.auction.process_bids()
 		# Alice should be able to increase a bid on the same item, even though both bids would be too expensive together
 		self.assertEqual(result["winning_bid"]["total_cost"], money)
+		self.assertEqual(result["winning_bid"]["total_charge"], money//2+11)
 		self.assertEqual(result["winning_bid"]["winning_item"], "pepsiman")
 		self.assertEqual(len(result["all_bids"]), 2) #and not 3
 
@@ -199,7 +200,7 @@ class AuctionsysTester(unittest.TestCase):
 		self.auction.place_bid("felk", "pepsiman", 10)
 		result = self.auction.process_bids()
 		self.assertEqual(result["winning_bid"]["winning_item"], "pepsiman")
-		self.assertEqual(result["winning_bid"]["total_cost"], 1)
+		self.assertEqual(result["winning_bid"]["total_charge"], 1)
 		
 	def test_no_bids(self):
 		result = self.auction.process_bids()
