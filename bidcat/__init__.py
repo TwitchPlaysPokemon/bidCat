@@ -142,8 +142,11 @@ class Auction(object):
         winning_item = highest_bid_item[0]
         total_cost = second_highest_item[1]+1 #winner only bids 1 more than they must
 
-        #well, unless there was only 1 bid, or if two bids tie (in which case the chronologically first bid wins).
-        if(len(self.bids) == 1) or (highest_bid_item[1] == second_highest_item[1]): 
+        #well, unless there was only 1 bid, in which case the winner pays 1
+        if(len(self.bids) == 1):
+            total_cost = 1
+        #and if two bids tie, the chronologically first bid wins.
+        elif(highest_bid_item[1] == second_highest_item[1]): 
             total_cost = highest_bid_item[1]
 
         #If there aren't any bids, then there aren't any bids for the winning item, either.
