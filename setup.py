@@ -2,7 +2,7 @@
 from setuptools import setup
 setup(
     name="bidcat",
-    version="1.0",
+    version="1.1",
     packages=["bidcat"],
 
     author="1hlixed",
