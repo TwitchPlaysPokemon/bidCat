@@ -165,12 +165,12 @@ class Auction(object):
             }
 
         #Now, compute who pays what using everyone-owes-equally
-        sortedbids = sorted(bids_for_item[winning_item],key=lambda bid:bid[2],reverse=True)
+        sortedbids = sorted(bids_for_item[winning_item],key=lambda bid:bid.max_bid,reverse=True)
 
         alloting = {}
         #start by making each person owe 0 tokens
         for bid in sortedbids:
-            alloting[bid[0]] = 0
+            alloting[bid.user_id] = 0
 
         allotted = 0
         bid_number = 0
