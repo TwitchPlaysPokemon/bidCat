@@ -207,6 +207,15 @@ class AuctionsysTester(unittest.TestCase):
 		self.assertEqual(result["winning_bid"], None)
 		self.assertEqual(result["all_bids"], [])
 
+	def test_multibid_first_wins(self):
+		money = self.bank._starting_amount
+		self.auction.place_bid("alice", "pepsiman", 1)
+		self.auction.place_bid("bob", "katamari", 2)
+		self.auction.place_bid("alice", "pepsiman", 1)
+		result = self.auction.process_bids()["winning_bid"]
+		# katamari should have won
+		self.assertEqual(result["winning_item"], "pepsiman")
+
 if __name__ == "__main__":
 	logging.basicConfig(level=logging.INFO)
 	unittest.main()
