@@ -1,7 +1,7 @@
 
 import unittest
 import logging
-from bidcatv2 import Auction, InsufficientMoneyError
+from bidcatv2 import Auction, InsufficientMoneyError, AlreadyBidError, NoExistingBidError
 import datetime
 
 class AuctionsysTester(unittest.TestCase):
@@ -145,36 +145,35 @@ class AuctionsysTester(unittest.TestCase):
 
 	def test_enough_money_for_replace(self):
 		self.auction.place_bid("alice", "pepsiman", self.max_money-1)
-		self.auction.place_bid("alice", "pepsiman", self.max_money)
+		self.auction.replace_bid("alice", "pepsiman", self.max_money)
 
 	def test_enough_money_for_increase(self):
 		self.auction.place_bid("alice", "pepsiman", self.max_money-1)
-		self.auction.place_bid("alice", "pepsiman", 1, add=True)
+		self.auction.increase_bid("alice", "pepsiman", 1)
 		self.assertRaises(
 			InsufficientMoneyError,
-			self.auction.place_bid,
+			self.auction.increase_bid,
 			"alice",
 			"pepsiman",
 			1,
-			add=True,
 		)
 
 	def test_increase_bet(self):
 		self.auction.place_bid("alice", "pepsiman", 1)
-		self.auction.place_bid("alice", "pepsiman", 1, add=True)
+		self.auction.increase_bid("alice", "pepsiman", 1)
 		bids = self.auction.get_all_bids()
 		self.assertEqual(bids, {"pepsiman": {"alice": 2}})
 
-	def test_overwrite_bet(self):
+	def test_replace_bet(self):
 		self.auction.place_bid("alice", "pepsiman", 2)
-		self.auction.place_bid("alice", "pepsiman", 1)
+		self.auction.replace_bid("alice", "pepsiman", 1)
 		bids = self.auction.get_all_bids()
 		self.assertEqual(bids, {"pepsiman": {"alice": 1}})
 
 	def test_decrease_to_tie(self):
 		self.auction.place_bid("alice", "pepsiman", 2)
 		self.auction.place_bid("bob", "katamari", 1)
-		self.auction.place_bid("alice", "pepsiman", 1)
+		self.auction.replace_bid("alice", "pepsiman", 1)
 		# katamari should win this!
 		winner = self.auction.get_winner()
 		self.assertEqual(winner["item"], "katamari")
@@ -182,7 +181,7 @@ class AuctionsysTester(unittest.TestCase):
 	def test_increase_to_tie(self):
 		self.auction.place_bid("alice", "pepsiman", 1)
 		self.auction.place_bid("bob", "katamari", 2)
-		self.auction.place_bid("alice", "pepsiman", 1, add=True)
+		self.auction.increase_bid("alice", "pepsiman", 1)
 		# katamari should win this!
 		winner = self.auction.get_winner()
 		self.assertEqual(winner["item"], "katamari")
@@ -190,7 +189,7 @@ class AuctionsysTester(unittest.TestCase):
 	def test_overtake(self):
 		self.auction.place_bid("alice", "pepsiman", 1)
 		self.auction.place_bid("bob", "katamari", 2)
-		self.auction.place_bid("alice", "pepsiman", 2, add=True)
+		self.auction.increase_bid("alice", "pepsiman", 2)
 		# pepsiman should win this!
 		winner = self.auction.get_winner()
 		self.assertEqual(winner["item"], "pepsiman")
@@ -241,6 +240,40 @@ class AuctionsysTester(unittest.TestCase):
 		self.assertEqual(bids, {})
 		winner = self.auction.get_winner()
 		self.assertEqual(winner, None)
+
+	def test_bid_twice(self):
+		self.auction.place_bid("alice", "pepsiman", 1)
+		self.assertRaises(
+			AlreadyBidError,
+			self.auction.place_bid,
+			"alice",
+			"pepsiman",
+			1,
+		)
+
+	def test_replace_nonexistent(self):
+		self.assertRaises(
+			NoExistingBidError,
+			self.auction.replace_bid,
+			"alice",
+			"pepsiman",
+			1,
+		)
+
+	def test_increase_nonexistent(self):
+		self.assertRaises(
+			NoExistingBidError,
+			self.auction.increase_bid,
+			"alice",
+			"pepsiman",
+			1,
+		)
+
+	def test_manual_replace(self):
+		self.auction.place_bid("alice", "pepsiman", 1)
+		self.auction.remove_bid("alice", "pepsiman")
+		self.auction.place_bid("alice", "pepsiman", 1)
+		# no exception
 
 if __name__ == "__main__":
 	logging.basicConfig(level=logging.INFO)

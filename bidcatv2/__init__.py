@@ -47,7 +47,7 @@ class Auction:
         self.bank = bank
         self.bank.reserved_money_checker_functions.add(self.get_reserved_money)
         # item -> user -> amount
-        self._itembids = defaultdict(OrderedDict)
+        self._itembids = {}
         # keep an order of when items got updated.
         # if 2 items tie in price, the one least recently updates wins.
         self._changes_tracker = []
@@ -80,23 +80,52 @@ class Auction:
             self._changes_tracker.remove(item)
         self._changes_tracker.append(item)
 
-    def place_bid(self, user, item, amount, add=False):
+    def _handle_bid(self, user, item, amount, replace=False):
         """For that user, bids the given amount on the given item.
         If add is True, adds the amount onto the bet instead of replacing."""
         if amount < 1:
             raise ValueError("amount must be a number above 0.")
-        previous_amount = self._itembids[item].pop(user, 0)
-        if add:
-            amount += previous_amount
-        elif previous_amount == amount:
+        previous_bid = None
+        if item in self._itembids:
+            previous_bid = self._itembids[item].get(user)
+        already_bid = previous_bid is not None
+        if not replace and already_bid:
+            raise AlreadyBidError("There already is a bid from that user on that item.")
+        elif replace and not already_bid:
+            raise NoExistingBidError("There is no bid from that user on that item which could be replaced.")
+        if replace and previous_bid == amount:
             # no change
             return
+        needed_money = amount
+        if replace:
+            needed_money -= previous_bid
         available_money = self.bank.get_available_money(user)
-        if amount > available_money:
+        if needed_money > available_money:
             raise InsufficientMoneyError("Can't affort to bid {}, only {} available."
-                                         .format(amount, available_money))
+                                         .format(needed_money, available_money))
         self._update_last_change(item)
+        if not item in self._itembids:
+            self._itembids[item] = OrderedDict()
         self._itembids[item][user] = amount
+
+    def place_bid(self, user, item, amount):
+        """For that user, bids the given amount on the given item.
+        Throws AlreadyBidError if there already is a bid from that user on that item.
+        """
+        self._handle_bid(user, item, amount, replace=False)
+
+    def replace_bid(self, user, item, amount):
+        """For that user, bids the given amount on the given item, replacing an old bid.
+        Throws NoExistingBidError if there was no bid from that user on that item to replace.
+        """
+        self._handle_bid(user, item, amount, replace=True)
+
+    def increase_bid(self, user, item, amount):
+        """Does the same as replace_bid, but instead adds the new amount onto the old one.
+        """
+        # Checking for existence is done by replace_bid()
+        previous_bid = self._itembids.get(item, {}).get(user, 0)
+        self.replace_bid(user, item, amount+previous_bid)
 
     def remove_bid(self, user, item):
         """For that user, removes his bid on that item.
