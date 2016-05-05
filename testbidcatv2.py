@@ -286,6 +286,19 @@ class AuctionsysTester(unittest.TestCase):
 			("pepsiman", {"alice": 1}),
 		])
 
+	def test_favor_earlier_after_replace(self):
+		self.auction.place_bid("alice", "pepsiman", 3)
+		self.auction.place_bid("bob", "pepsiman", 2)
+		self.auction.replace_bid("alice", "pepsiman", 2)
+		self.auction.place_bid("charlie", "katamari", 2)
+		# alice decreased to 2, so her bet is "newer".
+		# should favor bob, so bob should pay 1 and alice 2
+		money_owed = self.auction.get_winner()["money_owed"]
+		self.assertEqual(money_owed, {
+			"alice": 2,
+			"bob": 1,
+		})
+
 if __name__ == "__main__":
 	logging.basicConfig(level=logging.INFO)
 	unittest.main()

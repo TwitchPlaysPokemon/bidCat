@@ -107,6 +107,7 @@ class Auction:
         if not item in self._itembids:
             self._itembids[item] = OrderedDict()
         self._itembids[item][user] = amount
+        self._itembids[item].move_to_end(user)
 
     def place_bid(self, user, item, amount):
         """For that user, bids the given amount on the given item.
