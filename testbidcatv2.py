@@ -207,6 +207,32 @@ class AuctionsysTester(unittest.TestCase):
 		bids = self.auction.get_all_bids()
 		self.assertEqual(bids, {"katamari": {"bob": 1}})
 
+	def test_remove_from_empty_auction(self):
+		bids = self.auction.get_all_bids()
+		self.assertEqual(bids, {})
+
+		#empty remove should do nothing
+		removed = self.auction.remove_bid("alice", "pepsiman")
+		self.assertFalse(removed)
+
+		bids = self.auction.get_all_bids()
+		self.assertEqual(bids, {})
+
+		#removing with an existing user should also do nothing
+		self.auction.place_bid("alice", "pepsiman", 1)
+		removed = self.auction.remove_bid("alice", "katamari")
+		self.assertFalse(removed)
+
+		#the old bid should still be around
+		bids = self.auction.get_all_bids()
+		self.assertEqual(bids["pepsiman"], {"alice": 1})
+
+		#removing all bids means no bids exist
+		removed = self.auction.remove_bid("alice", "pepsiman")
+		self.assertTrue(removed)
+		bids = self.auction.get_all_bids()
+		self.assertEqual(bids, {})
+
 	def test_clear(self):
 		self.auction.place_bid("alice", "pepsiman", 1)
 		self.auction.place_bid("bob", "katamari", 1)
