@@ -275,6 +275,17 @@ class AuctionsysTester(unittest.TestCase):
 		self.auction.place_bid("alice", "pepsiman", 1)
 		# no exception
 
+	def test_get_all_bids_ordered(self):
+		self.auction.place_bid("alice", "pepsiman", 1)
+		self.auction.place_bid("bob", "katamari", 2)
+		self.auction.place_bid("charlie", "catz", 2)
+		bids = self.auction.get_all_bids_ordered()
+		self.assertEqual(bids, [
+			("katamari", {"bob": 2}),
+			("catz", {"charlie": 2}),
+			("pepsiman", {"alice": 1}),
+		])
+
 if __name__ == "__main__":
 	logging.basicConfig(level=logging.INFO)
 	unittest.main()

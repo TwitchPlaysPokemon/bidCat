@@ -157,6 +157,18 @@ class Auction:
         """Returns all bids as dict(item:dict(user:amount))"""
         return self._itembids
 
+    def get_all_bids_ordered(self):
+        """Returns all bids as [tuple(item, dict(user:amount))...], ordered by
+        ranking (first=winner)"""
+        # get items sorted by total money first, and then by least recently updated
+        # (~= first bid wins if tied)
+        def by_amount_and_last_update(dictitem):
+            item, bids = dictitem
+            # smaller = first, therefore sum is negated.
+            # but index of recent updates is not, because smaller = ealier, as desired
+            return (-sum(bids.values()), self._changes_tracker.index(item))
+        return sorted(self._itembids.items(), key=by_amount_and_last_update)
+
     def get_winner(self):
         """Calculated the item currently winning.
         Returns None if no bids, or a dict structured like this:
@@ -168,19 +180,12 @@ class Auction:
             "money_owed": dict(user:money) containing the amount of money to pay
                 allotted between all bidders. It's sum is total_charge
         }"""
-        # get items sorted by total money first, and then by least recently updated
-        # (~= first bid wins if tied)
-        def by_amount_and_last_update(dictitem):
-            item, bids = dictitem
-            # smaller = first, therefore sum is negated.
-            # but index of recent updates is not, because smaller = ealier, as desired
-            return (-sum(bids.values()), self._changes_tracker.index(item))
-        ordered = sorted(self._itembids.items(), key=by_amount_and_last_update)
-        if not ordered:
+        bids = self.get_all_bids_ordered()
+        if not bids:
             # no bids
             return None
         # extract the winner, save the rest
-        (winning_item, winning_bids), *rest = ordered
+        (winning_item, winning_bids), *rest = bids
         # determine the second highest bet amount
         second_bid = 0
         if rest:
