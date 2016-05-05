@@ -147,7 +147,7 @@ class AuctionsysTester(unittest.TestCase):
 		self.auction.place_bid("alice", "pepsiman", self.max_money-1)
 		self.auction.place_bid("alice", "pepsiman", self.max_money)
 
-	def test_enough_money_for_increas(self):
+	def test_enough_money_for_increase(self):
 		self.auction.place_bid("alice", "pepsiman", self.max_money-1)
 		self.auction.place_bid("alice", "pepsiman", 1, add=True)
 		self.assertRaises(
