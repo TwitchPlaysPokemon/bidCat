@@ -19,7 +19,24 @@ from math import ceil
 from operator import itemgetter
 
 
-class InsufficientMoneyError(Exception): pass
+class BiddingError(Exception):
+    '''Base Exception for all bidding errors.'''
+    pass
+
+class InsufficientMoneyError(BiddingError):
+    '''Is raised when a bid fails due to not enough available money.'''
+    pass
+
+class AlreadyBidError(BiddingError):
+    '''Is raised when a bid fails due to a previous bid on that item
+    already existing.'''
+    pass
+
+class NoExistingBidError(BiddingError):
+    '''Is raised when replacing or increasing a bid failed because there
+    was no previous bid.'''
+    pass
+
 
 class Auction:
     """Handles multiple users bidding on multiple items, only one item can win.
@@ -84,10 +101,9 @@ class Auction:
     def remove_bid(self, user, item):
         """For that user, removes his bid on that item.
         Returns True if a bid was removed, or False if there was no bid."""
-        try:
-            del self._itembids[item][user]
-        except KeyError:
+        if item not in self._itembids or user not in self._itembids[item]:
             return False
+        del self._itembids[item][user]
         # remove if now empty
         if self._itembids[item]: 
             self._update_last_change(item)
