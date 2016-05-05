@@ -117,11 +117,11 @@ class Auction:
         Returns None if no bids, or a dict structured like this:
         {
             "item": identifier of the item that won
-            "money_max": total max sum of money from bids on this item.
-            "money_actual": actual sum of money that would currently be paid.
-                This can be less than money_max if there is a gap to the 2nd highest bid.
+            "total_bid": total max sum of money from bids on this item.
+            "total_charge": actual sum of money that would currently be paid.
+                This can be less than total_bid if there is a gap to the 2nd highest bid.
             "money_owed": dict(user:money) containing the amount of money to pay
-                allotted between all bidders. It's sum is money_actual
+                allotted between all bidders. It's sum is total_charge
         }"""
         # get items sorted by total money first, and then by least recently updated
         # (~= first bid wins if tied)
@@ -143,29 +143,29 @@ class Auction:
             second_bid = sum(second_item_bids.values())
         # determine what will actually be paid.
         # e.g. if the 2nd highest bid was 5, only pay 6
-        money_max = sum(winning_bids.values())
-        overpaid = max(0, money_max-second_bid-1)
-        money_actual = money_max - overpaid
+        total_bid = sum(winning_bids.values())
+        overpaid = max(0, total_bid-second_bid-1)
+        total_charge = total_bid - overpaid
         # allot the actual price between the bidders
         # Step 1: calculate the paid price based on the percentage of the full price, ceiled!
         money_owed = OrderedDict()
         for user, amount in sorted(winning_bids.items(), key=itemgetter(1), reverse=True):
-            percentage = amount / money_max
-            money_owed[user] = ceil(money_actual * percentage)
+            percentage = amount / total_bid
+            money_owed[user] = ceil(total_charge * percentage)
         # Note the above iteration order: highest bidders first, then ordered of winning_bids,
         # which is a OrderedDict too, and therefore insertion order.
         # This ensures earlier bids are visited first, and favored for following price discounts:
         # Step 2: because of ceiling the prices, the sum might be too high.
         # => calculate how much was overpaid, and discount the higher, and if tied the earlier bidders
-        overpaid = sum(money_owed.values()) - money_actual
+        overpaid = sum(money_owed.values()) - total_charge
         user_iter = iter(money_owed)
         for _ in range(overpaid):
             money_owed[next(user_iter)] -= 1
         # return all results as dict
         return {
             "item": winning_item,
-            "money_max": money_max,
-            "money_actual": money_actual,
+            "total_bid": total_bid,
+            "total_charge": total_charge,
             "money_owed": money_owed,
         }
 

@@ -21,8 +21,8 @@ class AuctionsysTester(unittest.TestCase):
 		winner = self.auction.get_winner()
 		self.assertEqual(winner["item"], "pepsiman")
 		self.assertEqual(winner["money_owed"], {"alice": 1})
-		self.assertEqual(winner["money_max"], 1)
-		self.assertEqual(winner["money_actual"], 1)
+		self.assertEqual(winner["total_bid"], 1)
+		self.assertEqual(winner["total_charge"], 1)
 
 	def test_bid_registering(self):
 		self.auction.place_bid("alice", "pepsiman", 1)
@@ -49,8 +49,8 @@ class AuctionsysTester(unittest.TestCase):
 		winner = self.auction.get_winner()
 		self.assertEqual(winner["item"], "katamari")
 		self.assertEqual(winner["money_owed"], {"bob": 2})
-		self.assertEqual(winner["money_max"], 10)
-		self.assertEqual(winner["money_actual"], 2)
+		self.assertEqual(winner["total_bid"], 10)
+		self.assertEqual(winner["total_charge"], 2)
 
 	def test_collaboration(self):
 		self.auction.place_bid("alice", "pepsiman", 1)
@@ -60,8 +60,8 @@ class AuctionsysTester(unittest.TestCase):
 		winner = self.auction.get_winner()
 		self.assertEqual(winner["item"], "pepsiman")
 		self.assertEqual(winner["money_owed"], {"alice": 1, "bob": 1})
-		self.assertEqual(winner["money_max"], 2)
-		self.assertEqual(winner["money_actual"], 2)
+		self.assertEqual(winner["total_bid"], 2)
+		self.assertEqual(winner["total_charge"], 2)
 		
 	def test_one_overpaid(self):
 		self.auction.place_bid("alice", "pepsiman", 10)
@@ -69,8 +69,8 @@ class AuctionsysTester(unittest.TestCase):
 		winner = self.auction.get_winner()
 		self.assertEqual(winner["item"], "pepsiman")
 		self.assertEqual(winner["money_owed"], {"alice": 1})
-		self.assertEqual(winner["money_max"], 10)
-		self.assertEqual(winner["money_actual"], 1)
+		self.assertEqual(winner["total_bid"], 10)
+		self.assertEqual(winner["total_charge"], 1)
 		
 	def test_multi_overpaid(self):
 		self.auction.place_bid("alice", "pepsiman", 10)
@@ -79,8 +79,8 @@ class AuctionsysTester(unittest.TestCase):
 		winner = self.auction.get_winner()
 		self.assertEqual(winner["item"], "pepsiman")
 		self.assertEqual(winner["money_owed"], {"alice": 6})
-		self.assertEqual(winner["money_max"], 10)
-		self.assertEqual(winner["money_actual"], 6)
+		self.assertEqual(winner["total_bid"], 10)
+		self.assertEqual(winner["total_charge"], 6)
 
 	def test_favor_first_item(self):
 		self.auction.place_bid("alice", "pepsiman", 3)
@@ -89,8 +89,8 @@ class AuctionsysTester(unittest.TestCase):
 		winner = self.auction.get_winner()
 		self.assertEqual(winner["item"], "pepsiman")
 		self.assertEqual(winner["money_owed"], {"alice": 3})
-		self.assertEqual(winner["money_max"], 3)
-		self.assertEqual(winner["money_actual"], 3)
+		self.assertEqual(winner["total_bid"], 3)
+		self.assertEqual(winner["total_charge"], 3)
 
 	def test_favor_first_bidder(self):
 		self.auction.place_bid("alice", "pepsiman", 1)
@@ -99,8 +99,8 @@ class AuctionsysTester(unittest.TestCase):
 		winner = self.auction.get_winner()
 		self.assertEqual(winner["item"], "pepsiman")
 		self.assertEqual(winner["money_owed"], {"alice": 0, "bob": 1})
-		self.assertEqual(winner["money_max"], 2)
-		self.assertEqual(winner["money_actual"], 1)
+		self.assertEqual(winner["total_bid"], 2)
+		self.assertEqual(winner["total_charge"], 1)
 
 	def test_distribute_cost(self):
 		self.auction.place_bid("alice", "pepsiman", 5)
@@ -111,8 +111,8 @@ class AuctionsysTester(unittest.TestCase):
 		winner = self.auction.get_winner()
 		self.assertEqual(winner["item"], "pepsiman")
 		self.assertEqual(winner["money_owed"], {"alice": 2, "bob": 4})
-		self.assertEqual(winner["money_max"], 15)
-		self.assertEqual(winner["money_actual"], 6)
+		self.assertEqual(winner["total_bid"], 15)
+		self.assertEqual(winner["total_charge"], 6)
 
 	def test_odd_distribution(self):
 		self.auction.place_bid("alice", "pepsiman", 2)
@@ -131,8 +131,8 @@ class AuctionsysTester(unittest.TestCase):
 			"charlie": 2,
 			"deku": 2,
 		})
-		self.assertEqual(winner["money_max"], 8)
-		self.assertEqual(winner["money_actual"], 6)
+		self.assertEqual(winner["total_bid"], 8)
+		self.assertEqual(winner["total_charge"], 6)
 
 	def test_not_enough_money(self):
 		self.assertRaises(
@@ -197,7 +197,7 @@ class AuctionsysTester(unittest.TestCase):
 
 	def test_no_winner(self):
 		winner = self.auction.get_winner()
-		self.assertEquals(winner, None)
+		self.assertEqual(winner, None)
 
 	def test_remove(self):
 		self.auction.place_bid("alice", "pepsiman", 1)
