@@ -1,220 +1,303 @@
+
 import unittest
 import logging
-from bidcat import Auction, InsufficientMoneyError
+from bidcat import Auction, InsufficientMoneyError, AlreadyBidError, NoExistingBidError
 import datetime
 
 class AuctionsysTester(unittest.TestCase):
 	def setUp(self):
 		from banksys import DummyBank
+		self.max_money = 1000
 		self.bank = DummyBank()
+		self.bank._starting_amount = self.max_money  # TODO don't fiddle with other's privates
 		self.auction = Auction(bank=self.bank)
 		self.auction.register_reserved_money_checker()
-		
+
 	def tearDown(self):
 		self.auction.deregister_reserved_money_checker()
 
-	def test_bids(self):
-		self.auction.place_bid("bob", "pepsiman", 1)
-		bids = self.auction.process_bids()["all_bids"]
-		self.assertEqual(bids,[("bob","pepsiman",1)])
-
-		self.auction.place_bid("alice", "katamari", 2)
-		bids = self.auction.process_bids()["all_bids"]
-		self.assertEqual(bids,[("bob","pepsiman",1),("alice","katamari",2)])
-
-		#if another bid has the same user_id and item_id as previously seen, remove the old bid
-		self.auction.place_bid("bob", "pepsiman", 2)
-		bids = self.auction.process_bids()["all_bids"]
-		self.assertEqual(bids,[("alice","katamari",2),("bob","pepsiman",2)])
-
-	def test_incremental_bidding(self):
-		self.auction.place_bid("bob", "pepsiman", 100)
-		self.auction.place_bid("alice", "katamari", 2)
-
-		result = self.auction.process_bids()
-		#Bob should pay 1 more than the next-lowest bid of 2
-		self.assertEqual(result["winning_bid"]["total_charge"],3)
-
-		#now, test it with collaboration
-		self.auction.clear()
-		self.auction.place_bid("bob", "pepsiman", 4)
-		self.auction.place_bid("alice", "katamari", 5)
-		self.auction.place_bid("cirno", "pepsiman", 4) #sorry; couldn't think of a good c-name
-
-		result = self.auction.process_bids()
-		self.assertEqual(result["winning_bid"]["total_charge"],6)
-		self.assertEqual(result["winning_bid"]["winning_item"],"pepsiman")
-
-		#If there's only 1 bid, they should pay 1
-		self.auction.clear()
-		self.auction.place_bid("bob", "pepsiman", 100)
-		result = self.auction.process_bids()
-		self.assertEqual(result["winning_bid"]["total_charge"],1)
-		self.assertEqual(result["winning_bid"]["winning_item"],"pepsiman")
-
-		#ties shouldn't change the winner
-		self.auction.place_bid("deku", "unfinished_battle", 100)
-		result = self.auction.process_bids()
-		self.assertEqual(result["winning_bid"]["winning_item"],"pepsiman")
-		self.assertEqual(result["winning_bid"]["total_cost"],100)
-
-
-	def test_winning(self):
-		self.auction.place_bid("bob", "pepsiman", 3)
-		self.auction.place_bid("alice", "katamari", 2)
-		result = self.auction.process_bids()
-		self.assertEqual(result["winning_bid"]["winning_item"],"pepsiman")
-
-		#new bids for the same item should override previous wins
-		self.auction.place_bid("cirno", "unfinished_battle", 5)
-		self.auction.place_bid("alice", "katamari", 4)
-		result = self.auction.process_bids()
-		self.assertEqual(result["winning_bid"]["winning_item"],"unfinished_battle")
-
-		#if a new bid is equal to the winner, the winning item shouldn't change
-		self.auction.place_bid("alice", "katamari", 5)
-		result = self.auction.process_bids()
-		self.assertEqual(result["winning_bid"]["winning_item"],"unfinished_battle")
-
-
-	def test_collaborative(self):
-		self.auction.place_bid("bob", "pepsiman", 1)
-		self.auction.place_bid("alice", "katamari", 3)
-		self.auction.place_bid("cirno", "unfinished_battle", 1)
-
-		result = self.auction.process_bids()
-		self.assertEqual(result["winning_bid"]["winning_item"],"katamari")
-		
-		#ties shouldn't change the winner
-		self.auction.place_bid("deku", "unfinished_battle", 2)
-		result = self.auction.process_bids()
-		self.assertEqual(result["winning_bid"]["winning_item"],"katamari")
-
-		#cirno's 1 + deku's 3=4, so the winner should change
-		self.auction.place_bid("deku", "unfinished_battle", 3)
-		result = self.auction.process_bids()
-		self.assertEqual(result["winning_bid"]["winning_item"],"unfinished_battle")
-		self.assertEqual(result["winning_bid"]["total_cost"],4)
-
-	def test_reserved(self):
-		self.auction.place_bid("bob", "peach", 4)
-		self.auction.place_bid("cirno", "peach", 9)
-		self.auction.place_bid("alice", "yoshi", 3)
-
-		self.assertEqual(self.auction.get_reserved_money("alice"),3)
-		self.assertEqual(self.auction.get_reserved_money("bob"),4)
-		self.assertEqual(self.auction.get_reserved_money("cirno"),9)
-		#If not in the system yet, there should be no money reserved
-		self.assertEqual(self.auction.get_reserved_money("deku"),0)
-
-	def test_winning_bids(self):
-		self.auction.place_bid("cirno", "pepsiman", 2)
-		self.auction.place_bid("alice", "katamari", 2)
-		self.auction.place_bid("bob", "pepsiman", 4)
-		self.auction.place_bid("deku", "unfinished_battle", 3)
-		#some bids get upgraded
-		self.auction.place_bid("alice", "katamari", 5)
-		self.auction.place_bid("cirno", "pepsiman", 4)
-
-		result = self.auction.process_bids()
-		self.assertEqual(result["winning_bid"]["winning_item"],"pepsiman")
-
-		for bid in result["winning_bid"]["bids"]:
-			self.assertEqual(bid[1], result["winning_bid"]["winning_item"])
-
-	def test_insufficient_money(self):
-		#give alice 100 money
-		bank = self.auction.bank
-		bank._adjust_stored_money_value('alice',-bank._starting_amount)
-		bank._adjust_stored_money_value('alice',100)
-		self.assertEqual(bank.get_total_money('alice'),100)
-
-		self.auction.place_bid("alice", "katamari", 66)
-		self.auction.place_bid("alice", "unfinished_battle", 34)
-		
-		self.assertEqual(self.auction.get_reserved_money("alice"),100)
-
-		try:
-			self.auction.place_bid("alice", "pepsiman", 1)
-			self.assertEqual("No InsufficientMoneyError raised",0)
-		except InsufficientMoneyError:
-			pass
-
-		#test raising a previous bid past the mark
-		self.auction.clear()
-		self.auction.place_bid("alice", "katamari", 66)
-		self.auction.place_bid("alice", "unfinished_battle", 34)
-
-		self.assertEqual(self.auction.get_reserved_money("alice"),100)
-		try:
-			self.auction.place_bid("alice", "unfinished_battle", 35)
-			self.assertEqual("No InsufficientMoneyError raised",0)
-		except InsufficientMoneyError:
-			pass
-
-	def test_collaborative_allotting(self):
+	def test_single_bid(self):
 		self.auction.place_bid("alice", "pepsiman", 1)
-		self.auction.place_bid("bob", "pepsiman", 4)
-		self.auction.place_bid("cirno", "pepsiman", 2)
+		winner = self.auction.get_winner()
+		self.assertEqual(winner["item"], "pepsiman")
+		self.assertEqual(winner["money_owed"], {"alice": 1})
+		self.assertEqual(winner["total_bid"], 1)
+		self.assertEqual(winner["total_charge"], 1)
+
+	def test_bid_registering(self):
+		self.auction.place_bid("alice", "pepsiman", 1)
+		bids = self.auction.get_all_bids()
+		self.assertEqual(bids, {"pepsiman": {"alice": 1}})
+		bids = self.auction.get_bids_for_item("pepsiman")
+		self.assertEqual(bids, {"alice": 1})
+		bids = self.auction.get_bids_for_user("alice")
+		self.assertEqual(bids, {"pepsiman": 1})
+
+	def test_more_bids_registering(self):
+		self.auction.place_bid("alice", "pepsiman", 5)
+		self.auction.place_bid("bob", "pepsiman", 10)
+		self.auction.place_bid("charlie", "katamari", 42)
+		bids = self.auction.get_all_bids()
+		self.assertEqual(bids, {
+			"pepsiman": {"alice": 5, "bob": 10},
+			"katamari": {"charlie": 42},
+		})
+
+	def test_two_bids(self):
+		self.auction.place_bid("alice", "pepsiman", 1)
+		self.auction.place_bid("bob", "katamari", 10)
+		winner = self.auction.get_winner()
+		self.assertEqual(winner["item"], "katamari")
+		self.assertEqual(winner["money_owed"], {"bob": 2})
+		self.assertEqual(winner["total_bid"], 10)
+		self.assertEqual(winner["total_charge"], 2)
+
+	def test_collaboration(self):
+		self.auction.place_bid("alice", "pepsiman", 1)
+		self.auction.place_bid("bob", "pepsiman", 1)
+		self.auction.place_bid("charlie", "katamari", 1)
+		# pepsiman should win with 2 money
+		winner = self.auction.get_winner()
+		self.assertEqual(winner["item"], "pepsiman")
+		self.assertEqual(winner["money_owed"], {"alice": 1, "bob": 1})
+		self.assertEqual(winner["total_bid"], 2)
+		self.assertEqual(winner["total_charge"], 2)
+		
+	def test_one_overpaid(self):
+		self.auction.place_bid("alice", "pepsiman", 10)
+		# pepsiman should win with 1 money
+		winner = self.auction.get_winner()
+		self.assertEqual(winner["item"], "pepsiman")
+		self.assertEqual(winner["money_owed"], {"alice": 1})
+		self.assertEqual(winner["total_bid"], 10)
+		self.assertEqual(winner["total_charge"], 1)
+		
+	def test_multi_overpaid(self):
+		self.auction.place_bid("alice", "pepsiman", 10)
+		self.auction.place_bid("bob", "katamari", 5)
+		# pepsiman should win with 6 money
+		winner = self.auction.get_winner()
+		self.assertEqual(winner["item"], "pepsiman")
+		self.assertEqual(winner["money_owed"], {"alice": 6})
+		self.assertEqual(winner["total_bid"], 10)
+		self.assertEqual(winner["total_charge"], 6)
+
+	def test_favor_first_item(self):
+		self.auction.place_bid("alice", "pepsiman", 3)
+		self.auction.place_bid("bob", "katamari", 3)
+		# pepsiman should win with 3 money
+		winner = self.auction.get_winner()
+		self.assertEqual(winner["item"], "pepsiman")
+		self.assertEqual(winner["money_owed"], {"alice": 3})
+		self.assertEqual(winner["total_bid"], 3)
+		self.assertEqual(winner["total_charge"], 3)
+
+	def test_favor_first_bidder(self):
+		self.auction.place_bid("alice", "pepsiman", 1)
+		self.auction.place_bid("bob", "pepsiman", 1)
+		# pepsiman should win with 1 money, and bob should pay
+		winner = self.auction.get_winner()
+		self.assertEqual(winner["item"], "pepsiman")
+		self.assertEqual(winner["money_owed"], {"alice": 0, "bob": 1})
+		self.assertEqual(winner["total_bid"], 2)
+		self.assertEqual(winner["total_charge"], 1)
+
+	def test_distribute_cost(self):
+		self.auction.place_bid("alice", "pepsiman", 5)
+		self.auction.place_bid("bob", "pepsiman", 10)
+		self.auction.place_bid("charlie", "katamari", 5)
+		# pepsiman should win with 6 money
+		# alice should pay 2, and bob 4
+		winner = self.auction.get_winner()
+		self.assertEqual(winner["item"], "pepsiman")
+		self.assertEqual(winner["money_owed"], {"alice": 2, "bob": 4})
+		self.assertEqual(winner["total_bid"], 15)
+		self.assertEqual(winner["total_charge"], 6)
+
+	def test_odd_distribution(self):
+		self.auction.place_bid("alice", "pepsiman", 2)
+		self.auction.place_bid("bob", "pepsiman", 2)
+		self.auction.place_bid("charlie", "pepsiman", 2)
 		self.auction.place_bid("deku", "pepsiman", 2)
+		self.auction.place_bid("ennopp", "katamari", 5)
+		# pepsiman should win with 6 money
+		# alice and bob should pay 1
+		# charlie and deku should pay 2
+		winner = self.auction.get_winner()
+		self.assertEqual(winner["item"], "pepsiman")
+		self.assertEqual(winner["money_owed"], {
+			"alice": 1,
+			"bob": 1,
+			"charlie": 2,
+			"deku": 2,
+		})
+		self.assertEqual(winner["total_bid"], 8)
+		self.assertEqual(winner["total_charge"], 6)
 
-		self.auction.place_bid("eve", "katamari", 4)
+	def test_not_enough_money(self):
+		self.assertRaises(
+			InsufficientMoneyError,
+			self.auction.place_bid,
+			"alice",
+			"pepsiman",
+			self.max_money + 1,
+		)
 
-		result = self.auction.process_bids()
-		self.assertEqual(result["winning_bid"]["total_charge"],5)
-		self.assertEqual(result["winning_bid"]["amounts_owed"],{"alice":1,"bob":2,"cirno":1,"deku":1})
+	def test_enough_money_for_replace(self):
+		self.auction.place_bid("alice", "pepsiman", self.max_money-1)
+		self.auction.replace_bid("alice", "pepsiman", self.max_money)
 
-	def test_big_bids_collaborative_allotting(self):
-		self.auction.place_bid("alice", "katamari", 1000)
-		self.auction.place_bid("bob", "pepsiman", 1000)
-		self.auction.place_bid("cirno", "pepsiman", 1000)
-		self.auction.place_bid("deku", "pepsiman", 100)
-		self.auction.place_bid("eve", "pepsiman", 100)
-		self.auction.place_bid("flareon", "pepsiman", 1000)
-		self.auction.place_bid("geforcefly", "pepsiman", 1)
-		self.auction.place_bid("hlixed", "pepsiman", 1)
-		#measure time to process
-		start = datetime.datetime.now()
-		result = self.auction.process_bids()
-		finish = datetime.datetime.now()
-		milliseconds = (finish-start).microseconds / 1000
-		#this test is intended to be a realistic worst case scenario for bidding
-		#the current implementation's run time grows very quickly for large bids
-		#so if it's less than 10ms for over 3000 tokens in play it's probably OK
-		self.assertTrue(milliseconds < 10)
-		
-	def test_overwrite_bid(self):
-		money = self.bank._starting_amount
-		self.auction.place_bid("alice", "pepsiman", money//2)
-		self.auction.place_bid("alice", "pepsiman", money)
-		self.auction.place_bid("bob", "katamari",  money//2+10) #force the price up
-		result = self.auction.process_bids()
-		# Alice should be able to increase a bid on the same item, even though both bids would be too expensive together
-		self.assertEqual(result["winning_bid"]["total_cost"], money)
-		self.assertEqual(result["winning_bid"]["total_charge"], money//2+11)
-		self.assertEqual(result["winning_bid"]["winning_item"], "pepsiman")
-		self.assertEqual(len(result["all_bids"]), 2) #and not 3
+	def test_enough_money_for_increase(self):
+		self.auction.place_bid("alice", "pepsiman", self.max_money-1)
+		self.auction.increase_bid("alice", "pepsiman", 1)
+		self.assertRaises(
+			InsufficientMoneyError,
+			self.auction.increase_bid,
+			"alice",
+			"pepsiman",
+			1,
+		)
 
-	def test_one_bidder(self):
-		self.auction.place_bid("felk", "pepsiman", 1)
-		self.auction.place_bid("felk", "pepsiman", 10)
-		result = self.auction.process_bids()
-		self.assertEqual(result["winning_bid"]["winning_item"], "pepsiman")
-		self.assertEqual(result["winning_bid"]["total_charge"], 1)
-		
-	def test_no_bids(self):
-		result = self.auction.process_bids()
-		self.assertEqual(result["winning_bid"], None)
-		self.assertEqual(result["all_bids"], [])
+	def test_increase_bet(self):
+		self.auction.place_bid("alice", "pepsiman", 1)
+		self.auction.increase_bid("alice", "pepsiman", 1)
+		bids = self.auction.get_all_bids()
+		self.assertEqual(bids, {"pepsiman": {"alice": 2}})
 
-	def test_multibid_first_wins(self):
-		money = self.bank._starting_amount
+	def test_replace_bet(self):
+		self.auction.place_bid("alice", "pepsiman", 2)
+		self.auction.replace_bid("alice", "pepsiman", 1)
+		bids = self.auction.get_all_bids()
+		self.assertEqual(bids, {"pepsiman": {"alice": 1}})
+
+	def test_decrease_to_tie(self):
+		self.auction.place_bid("alice", "pepsiman", 2)
+		self.auction.place_bid("bob", "katamari", 1)
+		self.auction.replace_bid("alice", "pepsiman", 1)
+		# katamari should win this!
+		winner = self.auction.get_winner()
+		self.assertEqual(winner["item"], "katamari")
+
+	def test_increase_to_tie(self):
 		self.auction.place_bid("alice", "pepsiman", 1)
 		self.auction.place_bid("bob", "katamari", 2)
-		self.auction.place_bid("charlie", "pepsiman", 1)
-		result = self.auction.process_bids()["winning_bid"]
-		# katamari should have won
-		self.assertEqual(result["winning_item"], "katamari")
+		self.auction.increase_bid("alice", "pepsiman", 1)
+		# katamari should win this!
+		winner = self.auction.get_winner()
+		self.assertEqual(winner["item"], "katamari")
+
+	def test_overtake(self):
+		self.auction.place_bid("alice", "pepsiman", 1)
+		self.auction.place_bid("bob", "katamari", 2)
+		self.auction.increase_bid("alice", "pepsiman", 2)
+		# pepsiman should win this!
+		winner = self.auction.get_winner()
+		self.assertEqual(winner["item"], "pepsiman")
+
+	def test_no_winner(self):
+		winner = self.auction.get_winner()
+		self.assertEqual(winner, None)
+
+	def test_remove(self):
+		self.auction.place_bid("alice", "pepsiman", 1)
+		self.auction.place_bid("bob", "katamari", 1)
+		removed = self.auction.remove_bid("alice", "pepsiman")
+		self.assertTrue(removed)
+		bids = self.auction.get_all_bids()
+		self.assertEqual(bids, {"katamari": {"bob": 1}})
+
+	def test_remove_from_empty_auction(self):
+		bids = self.auction.get_all_bids()
+		self.assertEqual(bids, {})
+
+		#empty remove should do nothing
+		removed = self.auction.remove_bid("alice", "pepsiman")
+		self.assertFalse(removed)
+
+		bids = self.auction.get_all_bids()
+		self.assertEqual(bids, {})
+
+		#removing with an existing user should also do nothing
+		self.auction.place_bid("alice", "pepsiman", 1)
+		removed = self.auction.remove_bid("alice", "katamari")
+		self.assertFalse(removed)
+
+		#the old bid should still be around
+		bids = self.auction.get_all_bids()
+		self.assertEqual(bids["pepsiman"], {"alice": 1})
+
+		#removing all bids means no bids exist
+		removed = self.auction.remove_bid("alice", "pepsiman")
+		self.assertTrue(removed)
+		bids = self.auction.get_all_bids()
+		self.assertEqual(bids, {})
+
+	def test_clear(self):
+		self.auction.place_bid("alice", "pepsiman", 1)
+		self.auction.place_bid("bob", "katamari", 1)
+		self.auction.clear()
+		bids = self.auction.get_all_bids()
+		self.assertEqual(bids, {})
+		winner = self.auction.get_winner()
+		self.assertEqual(winner, None)
+
+	def test_bid_twice(self):
+		self.auction.place_bid("alice", "pepsiman", 1)
+		self.assertRaises(
+			AlreadyBidError,
+			self.auction.place_bid,
+			"alice",
+			"pepsiman",
+			1,
+		)
+
+	def test_replace_nonexistent(self):
+		self.assertRaises(
+			NoExistingBidError,
+			self.auction.replace_bid,
+			"alice",
+			"pepsiman",
+			1,
+		)
+
+	def test_increase_nonexistent(self):
+		self.assertRaises(
+			NoExistingBidError,
+			self.auction.increase_bid,
+			"alice",
+			"pepsiman",
+			1,
+		)
+
+	def test_manual_replace(self):
+		self.auction.place_bid("alice", "pepsiman", 1)
+		self.auction.remove_bid("alice", "pepsiman")
+		self.auction.place_bid("alice", "pepsiman", 1)
+		# no exception
+
+	def test_get_all_bids_ordered(self):
+		self.auction.place_bid("alice", "pepsiman", 1)
+		self.auction.place_bid("bob", "katamari", 2)
+		self.auction.place_bid("charlie", "catz", 2)
+		bids = self.auction.get_all_bids_ordered()
+		self.assertEqual(bids, [
+			("katamari", {"bob": 2}),
+			("catz", {"charlie": 2}),
+			("pepsiman", {"alice": 1}),
+		])
+
+	def test_favor_earlier_after_replace(self):
+		self.auction.place_bid("alice", "pepsiman", 3)
+		self.auction.place_bid("bob", "pepsiman", 2)
+		self.auction.replace_bid("alice", "pepsiman", 2)
+		self.auction.place_bid("charlie", "katamari", 2)
+		# alice decreased to 2, so her bet is "newer".
+		# should favor bob, so bob should pay 1 and alice 2
+		money_owed = self.auction.get_winner()["money_owed"]
+		self.assertEqual(money_owed, {
+			"alice": 2,
+			"bob": 1,
+		})
 
 if __name__ == "__main__":
 	logging.basicConfig(level=logging.INFO)

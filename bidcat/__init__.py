@@ -9,207 +9,214 @@ When this happens, the system will compute how many tokens to deduct from each u
 
 All references to "money" in this module refers to an arbitrary indivisible integer unit of currency.
 
-What is bidded on are called "items" and are referenced by strings or integers.
-
-User IDs are strings or integers.
+What is bidded on are called "items" and are any hashable objects.
+The bidding entities called "users" are any hashable objects.
 """
 
-import logging
+from contextlib import suppress
+from collections import defaultdict, OrderedDict
+from math import ceil
+from operator import itemgetter
 
-from collections import namedtuple
 
-Bid = namedtuple("Bid", ["user_id", "item_id", "max_bid"])
-ItemTotal = namedtuple("Bid", ["item_id", "total_bidded"])
-class InsufficientMoneyError(Exception): pass
+class BiddingError(Exception):
+    '''Base Exception for all bidding errors.'''
+    pass
 
-class Auction(object):
+class InsufficientMoneyError(BiddingError):
+    '''Is raised when a bid fails due to not enough available money.'''
+    pass
+
+class AlreadyBidError(BiddingError):
+    '''Is raised when a bid fails due to a previous bid on that item
+    already existing.'''
+    pass
+
+class NoExistingBidError(BiddingError):
+    '''Is raised when replacing or increasing a bid failed because there
+    was no previous bid.'''
+    pass
+
+
+class Auction:
     """Handles multiple users bidding on multiple items, only one item can win.
-
-    All provided item IDs and user IDs are assumed to be valid.
-    """
+    All provided items and users must be hashable."""
     def __init__(self, bank):
-        """
-        Arguments:
-            bank: bank object to access to reserve currency
-        """
-        # track bank
+        """Arguments:
+            bank: the bank object the auction checks and reserves users' money in."""
         self.bank = bank
-        # set up logging
-        self.log = logging.getLogger("auctionsys")
-        #list to keep track of bids
-        self.bids = []
-
-    def clear(self):
-        """Clear all stored bids. After calling this, self.get_reserved_money() will also be reset to 0 for every user"""
-        self.bids = []
+        self.bank.reserved_money_checker_functions.add(self.get_reserved_money)
+        # item -> user -> amount
+        self._itembids = {}
+        # keep an order of when items got updated.
+        # if 2 items tie in price, the one least recently updates wins.
+        self._changes_tracker = []
 
     def register_reserved_money_checker(self):
-        """Adds the reserved money checker function at the bank.
-
+        """Adds the reserved money checker function to the bank.
         If this is used the function MUST be removed before the auction object is deleted!
         """
-        self.log.info("registering reserved money checker")
         self.bank.reserved_money_checker_functions.add(self.get_reserved_money)
 
     def deregister_reserved_money_checker(self):
         """Removes the reserved money checker function from the bank.
-
         This MUST be called when the auction has been finished and fulfilled.
+        To just reset and reuse the auction, use reset()
         """
-        self.log.info("deregistering reserved money checker")
         self.bank.reserved_money_checker_functions.remove(self.get_reserved_money)
 
-    def get_reserved_money(self, user_id):
-        """Calculate the amount of money a user has tied up in the auction system.
+    def get_reserved_money(self, user):
+        """Returns the amount of money the user has reserved in this auction."""
+        return sum(self.get_bids_for_user(user).values())
 
-        It is guaranteed that no more than this amount will be taken from the
-        user's account without further action from this user.
+    def clear(self):
+        """Removes all bids."""
+        self._itembids.clear()
+
+    def _update_last_change(self, item):
+        """Call when the money bid on an item changed.
+        Moves that item to the end of the change tracker list."""
+        with suppress(ValueError):
+            self._changes_tracker.remove(item)
+        self._changes_tracker.append(item)
+
+    def _handle_bid(self, user, item, amount, replace=False):
+        """For that user, bids the given amount on the given item.
+        If add is True, adds the amount onto the bet instead of replacing."""
+        if amount < 1:
+            raise ValueError("amount must be a number above 0.")
+        previous_bid = None
+        if item in self._itembids:
+            previous_bid = self._itembids[item].get(user)
+        already_bid = previous_bid is not None
+        if not replace and already_bid:
+            raise AlreadyBidError("There already is a bid from that user on that item.")
+        elif replace and not already_bid:
+            raise NoExistingBidError("There is no bid from that user on that item which could be replaced.")
+        if replace and previous_bid == amount:
+            # no change
+            return
+        needed_money = amount
+        if replace:
+            needed_money -= previous_bid
+        available_money = self.bank.get_available_money(user)
+        if needed_money > available_money:
+            raise InsufficientMoneyError("Can't affort to bid {}, only {} available."
+                                         .format(needed_money, available_money))
+        self._update_last_change(item)
+        if not item in self._itembids:
+            self._itembids[item] = OrderedDict()
+        self._itembids[item][user] = amount
+        self._itembids[item].move_to_end(user)
+
+    def place_bid(self, user, item, amount):
+        """For that user, bids the given amount on the given item.
+        Throws AlreadyBidError if there already is a bid from that user on that item.
         """
-        total=0
-        for bid in self.bids:
-            if bid.user_id == user_id:
-                total += bid.max_bid
-        return total
+        self._handle_bid(user, item, amount, replace=False)
 
-    def place_bid(self, user_id, item_id, max_bid):
-        """Place a bid for the given item_id, max_bid, and user_id.
-
-        Will raise an InsufficientMoneyError if the user_id does not have enough bank balance to make that bid.
+    def replace_bid(self, user, item, amount):
+        """For that user, bids the given amount on the given item, replacing an old bid.
+        Throws NoExistingBidError if there was no bid from that user on that item to replace.
         """
-        if max_bid <= 0:
-            raise ValueError("'max_bid' must be a value above 0")
-        
-        available_money = self.bank.get_available_money(user_id)
-        reserved_money = self.bank.get_reserved_money(user_id)
+        self._handle_bid(user, item, amount, replace=True)
 
-        #check if we're replacing a bid
-        for bid in self.bids:
-            user,item,prev_bid_amt = bid
-            if (bid.user_id == user_id) and (bid.item_id == item_id):
-                new_amt_needed = max_bid - bid.max_bid
-                if new_amt_needed > available_money:
-                    self.log.info((max_bid,available_money,reserved_money))
-                    raise InsufficientMoneyError("can't afford to make bid")
+    def increase_bid(self, user, item, amount):
+        """Does the same as replace_bid, but instead adds the new amount onto the old one.
+        """
+        # Checking for existence is done by replace_bid()
+        previous_bid = self._itembids.get(item, {}).get(user, 0)
+        self.replace_bid(user, item, amount+previous_bid)
 
-                #remove the old bid; adding the replacement bid happens at the same .append() as if the bid was new
-                self.bids.remove(bid)
-                break
+    def remove_bid(self, user, item):
+        """For that user, removes his bid on that item.
+        Returns True if a bid was removed, or False if there was no bid."""
+        if item not in self._itembids or user not in self._itembids[item]:
+            return False
+        del self._itembids[item][user]
+        # remove if now empty
+        if self._itembids[item]: 
+            self._update_last_change(item)
         else:
-            # It's a new bid
-            if max_bid > available_money:
-                raise InsufficientMoneyError("can't afford to make bid")
+            del self._itembids[item]
+            self._changes_tracker.remove(item)
+        return True
 
-        self.bids.append(Bid(user_id, item_id, max_bid))
-        self.log.debug(str(user_id)+" placed bid for "+str(item_id)+": "+str(max_bid))
+    def get_bids_for_user(self, user):
+        """Returns a dict(item:amount) of that user's bids."""
+        bids = {}
+        for item, userbids in self._itembids.items():
+            with suppress(KeyError):
+                bids[item] = userbids[user]
+        return bids
 
-    def process_bids(self):
-        """Process everyone's bids and make any changes.
+    def get_bids_for_item(self, item):
+        """Returns a dict(user:amount) of bids on that item."""
+        return self._itembids.get(item, {})
 
-        Returns:
-            dict containing info about the new state of the auction and the current winner.
-            {
-            "winning_bid": {
-                "winning_item": the item that is currently winning
-                "total_cost": the sum of the bids for that item. Also how much is necessary to outbid.
-                "total_charge": How much, in total the winning bidders are being charged
-                "bids": an array containing namedtuples of (user_id, item_id, max_bid) with item==winning item
-                "amounts_owed": dict mapping user_id to the computed money they will pay
-                },
-            "all_bids": dict containing all (user_id, item, amt_bid) tuples for all items
-            }
-            If no bids have been placed, "winning_bid" will be None.
-        """
+    def get_all_bids(self):
+        """Returns all bids as dict(item:dict(user:amount))"""
+        return self._itembids
 
-        highest_bid_item = ItemTotal(None,0)
-        second_highest_item = ItemTotal(None,0) 
+    def get_all_bids_ordered(self):
+        """Returns all bids as [tuple(item, dict(user:amount))...], ordered by
+        ranking (first=winner)"""
+        # get items sorted by total money first, and then by least recently updated
+        # (~= first bid wins if tied)
+        def by_amount_and_last_update(dictitem):
+            item, bids = dictitem
+            # smaller = first, therefore sum is negated.
+            # but index of recent updates is not, because smaller = ealier, as desired
+            return (-sum(bids.values()), self._changes_tracker.index(item))
+        return sorted(self._itembids.items(), key=by_amount_and_last_update)
 
-        bids_for_item = {} # dict of {item_id: [bid_for_item_id, another_bid_for_item_id...]}
-        item_cost = {} # dict of {item_id: total_money_bidded_for_item} 
-
-        #Sum up the bids for each item to figure out the total amount of money spent on each item
-        for bid in self.bids:
-            if bid.item_id not in bids_for_item:
-                bids_for_item[bid.item_id] = []
-                item_cost[bid.item_id] = 0
-            item_cost[bid.item_id] += bid.max_bid
-            #Also keep track of which bids are for which item
-            bids_for_item[bid.item_id].append(bid)
-
-            #Now, keep track of the highest bid and the 2nd highest bid
-            if item_cost[bid.item_id] > highest_bid_item.total_bidded:
-                #The same item shouldn't be both first and 2nd highest
-                if (highest_bid_item.item_id is not None) and (bid.item_id != highest_bid_item.item_id):
-                    second_highest_item = highest_bid_item
-                highest_bid_item = ItemTotal(bid.item_id,item_cost[bid.item_id])
-            #if we have a new second-highest item, fix it
-            elif item_cost[bid.item_id] > second_highest_item.total_bidded:
-                second_highest_item = ItemTotal(bid.item_id,item_cost[bid.item_id])
-                
-        winning_item = highest_bid_item.item_id
-        total_charge = second_highest_item.total_bidded+1 #winner only bids 1 more than they must
-
-        #grab the total cost
-        total_cost = 0
-        if highest_bid_item.item_id is not None:
-            total_cost = item_cost[highest_bid_item.item_id]
-
-        #If two bids tie, the chronologically first bid wins.
-        if(highest_bid_item.total_bidded == second_highest_item.total_bidded):
-            total_charge = highest_bid_item.total_bidded
-
-        #If there aren't any bids, then there aren't any bids for the winning item, either.
-        if winning_item == None:
-            return {
-                "winning_bid": None,
-                "all_bids":self.bids,
-            }
-
-        #Now, compute who pays what using everyone-owes-equally
-        sortedbids = sorted(bids_for_item[winning_item],key=lambda bid:bid.max_bid,reverse=True)
-
-        alloting = {}
-        #start by making each person owe 0 tokens
-        for bid in sortedbids:
-            alloting[bid.user_id] = 0
-
-        allotted = 0
-        bid_number = 0
-        amt_users = len(sortedbids)
-        while allotted < total_charge: #This loop is inefficient for big bids (>1000)
-            user_id,item,bid_amt = sortedbids[bid_number]
-            if alloting[user_id] < bid_amt:
-                alloting[user_id] += 1
-                allotted += 1
-            bid_number = (bid_number+1)%amt_users
-        
-
-        self.log.debug("Processed bids; winning item is "+str(winning_item)+", total cost is "+str(total_cost)+", total charge is "+str(total_charge))
-
+    def get_winner(self):
+        """Calculated the item currently winning.
+        Returns None if no bids, or a dict structured like this:
+        {
+            "item": identifier of the item that won
+            "total_bid": total max sum of money from bids on this item.
+            "total_charge": actual sum of money that would currently be paid.
+                This can be less than total_bid if there is a gap to the 2nd highest bid.
+            "money_owed": dict(user:money) containing the amount of money to pay
+                allotted between all bidders. It's sum is total_charge
+        }"""
+        bids = self.get_all_bids_ordered()
+        if not bids:
+            # no bids
+            return None
+        # extract the winner, save the rest
+        (winning_item, winning_bids), *rest = bids
+        # determine the second highest bet amount
+        second_bid = 0
+        if rest:
+            _, second_item_bids = rest[0]
+            second_bid = sum(second_item_bids.values())
+        # determine what will actually be paid.
+        # e.g. if the 2nd highest bid was 5, only pay 6
+        total_bid = sum(winning_bids.values())
+        overpaid = max(0, total_bid-second_bid-1)
+        total_charge = total_bid - overpaid
+        # allot the actual price between the bidders
+        # Step 1: calculate the paid price based on the percentage of the full price, ceiled!
+        money_owed = OrderedDict()
+        for user, amount in sorted(winning_bids.items(), key=itemgetter(1), reverse=True):
+            percentage = amount / total_bid
+            money_owed[user] = ceil(total_charge * percentage)
+        # Note the above iteration order: highest bidders first, then ordered of winning_bids,
+        # which is a OrderedDict too, and therefore insertion order.
+        # This ensures earlier bids are visited first, and favored for following price discounts:
+        # Step 2: because of ceiling the prices, the sum might be too high.
+        # => calculate how much was overpaid, and discount the higher, and if tied the earlier bidders
+        overpaid = sum(money_owed.values()) - total_charge
+        user_iter = iter(money_owed)
+        for _ in range(overpaid):
+            money_owed[next(user_iter)] -= 1
+        # return all results as dict
         return {
-        "winning_bid": {
-            "winning_item":winning_item,
-            "total_charge":total_charge,
-            "total_cost":total_cost,
-            "bids":bids_for_item[winning_item],
-            "amounts_owed":alloting
-            },
-        "all_bids":self.bids,
+            "item": winning_item,
+            "total_bid": total_bid,
+            "total_charge": total_charge,
+            "money_owed": money_owed,
         }
 
-
-def main():
-    from banksys import DummyBank
-    logging.basicConfig(level=logging.DEBUG)
-    bank = DummyBank()
-    auction = Auction(bank=bank)
-    auction.register_reserved_money_checker()
-    auction.place_bid("bob", "pepsiman", 1)
-    print(auction.process_bids())
-    auction.place_bid("alice", "katamari", 2)
-    print(auction.process_bids())
-    auction.place_bid("bob", "pepsiman", 2)
-    print(auction.process_bids())
-    auction.deregister_reserved_money_checker()
-
-if __name__ == "__main__":
-    main()
