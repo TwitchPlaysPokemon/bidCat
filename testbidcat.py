@@ -1,6 +1,6 @@
 import unittest
 import logging
-from bidcat import Auction, InsufficientMoneyError, AlreadyBidError, NoExistingBidError
+from bidcat import Auction, InsufficientMoneyError, AlreadyBidError, NoExistingBidError, VisiblyLoweredError
 
 
 class AuctionsysTester(unittest.TestCase):
@@ -308,6 +308,26 @@ class AuctionsysTester(unittest.TestCase):
             "alice": 2,
             "bob": 1,
         })
+
+    def test_visibly_lowering_winner(self):
+        self.auction.place_bid("alice", "pepsiman", 4)
+        self.auction.place_bid("bob", "katamari", 2)
+        # lowering to 3 should still be okay
+        self.auction.replace_bid("alice", "pepsiman", 3, allow_visible_lowering=False)
+        # alice decreased to 2, causing it to be visibly lowered.
+        # That should raise VisiblyLoweredError
+        self.assertRaises(VisiblyLoweredError,
+                          self.auction.replace_bid,
+                          "alice", "pepsiman", 2, allow_visible_lowering=False)
+
+    def test_visibly_lowering_loser(self):
+        self.auction.place_bid("alice", "pepsiman", 4)
+        self.auction.place_bid("bob", "katamari", 2)
+        self.auction.place_bid("bob", "pepsiman", 2)  # different item, no effect
+        # losers can never lower their bids. Should raise VisiblyLoweredError
+        self.assertRaises(VisiblyLoweredError,
+                          self.auction.replace_bid,
+                          "bob", "katamari", 1, allow_visible_lowering=False)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

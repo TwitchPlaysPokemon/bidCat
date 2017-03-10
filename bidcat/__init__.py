@@ -38,6 +38,12 @@ class NoExistingBidError(BiddingError):
     pass
 
 
+class VisiblyLoweredError(BiddingError):
+    """Is raised when replacing a bid would cause the bid to be visibly
+    lowered."""
+    pass
+
+
 class Auction:
     """Handles multiple users bidding on multiple items, only one item can win.
     All provided items and users must be hashable."""
@@ -80,7 +86,7 @@ class Auction:
             self._changes_tracker.remove(item)
         self._changes_tracker.append(item)
 
-    def _handle_bid(self, user, item, amount, replace=False):
+    def _handle_bid(self, user, item, amount, replace=False, allow_visible_lowering=True):
         """For that user, bids the given amount on the given item.
         If add is True, adds the amount onto the bet instead of replacing."""
         if amount < 1:
@@ -103,6 +109,16 @@ class Auction:
         if needed_money > available_money:
             raise InsufficientMoneyError("Can't affort to bid {}, only {} available."
                                          .format(needed_money, available_money))
+        if replace and amount < previous_bid and not allow_visible_lowering:
+            # check if replacement lowers the visible bid
+            winner = self.get_winner()
+            if winner["item"] != item:
+                # not first place, therefore lowering is never possible
+                raise VisiblyLoweredError
+            headroom = winner["total_bid"] - winner["total_charge"]
+            decrease = previous_bid - amount
+            if decrease > headroom:
+                raise VisiblyLoweredError
         self._update_last_change(item)
         if item not in self._itembids:
             self._itembids[item] = OrderedDict()
@@ -115,11 +131,11 @@ class Auction:
         """
         self._handle_bid(user, item, amount, replace=False)
 
-    def replace_bid(self, user, item, amount):
+    def replace_bid(self, user, item, amount, allow_visible_lowering=True):
         """For that user, bids the given amount on the given item, replacing an old bid.
         Throws NoExistingBidError if there was no bid from that user on that item to replace.
         """
-        self._handle_bid(user, item, amount, replace=True)
+        self._handle_bid(user, item, amount, replace=True, allow_visible_lowering=allow_visible_lowering)
 
     def increase_bid(self, user, item, amount):
         """Does the same as replace_bid, but instead adds the new amount onto the old one.
