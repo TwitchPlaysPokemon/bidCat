@@ -14,27 +14,27 @@ The bidding entities called "users" are any hashable objects.
 """
 
 from contextlib import suppress
-from collections import defaultdict, OrderedDict
+from collections import OrderedDict
 from math import ceil
 from operator import itemgetter
 
 
 class BiddingError(Exception):
-    '''Base Exception for all bidding errors.'''
+    """Base Exception for all bidding errors."""
     pass
 
 class InsufficientMoneyError(BiddingError):
-    '''Is raised when a bid fails due to not enough available money.'''
+    """Is raised when a bid fails due to not enough available money."""
     pass
 
 class AlreadyBidError(BiddingError):
-    '''Is raised when a bid fails due to a previous bid on that item
-    already existing.'''
+    """Is raised when a bid fails due to a previous bid on that item
+    already existing."""
     pass
 
 class NoExistingBidError(BiddingError):
-    '''Is raised when replacing or increasing a bid failed because there
-    was no previous bid.'''
+    """Is raised when replacing or increasing a bid failed because there
+    was no previous bid."""
     pass
 
 
@@ -104,7 +104,7 @@ class Auction:
             raise InsufficientMoneyError("Can't affort to bid {}, only {} available."
                                          .format(needed_money, available_money))
         self._update_last_change(item)
-        if not item in self._itembids:
+        if item not in self._itembids:
             self._itembids[item] = OrderedDict()
         self._itembids[item][user] = amount
         self._itembids[item].move_to_end(user)
@@ -167,7 +167,7 @@ class Auction:
             item, bids = dictitem
             # smaller = first, therefore sum is negated.
             # but index of recent updates is not, because smaller = ealier, as desired
-            return (-sum(bids.values()), self._changes_tracker.index(item))
+            return -sum(bids.values()), self._changes_tracker.index(item)
         return sorted(self._itembids.items(), key=by_amount_and_last_update)
 
     def get_winner(self):
@@ -219,4 +219,3 @@ class Auction:
             "total_charge": total_charge,
             "money_owed": money_owed,
         }
-
