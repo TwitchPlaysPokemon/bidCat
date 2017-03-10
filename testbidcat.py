@@ -101,6 +101,16 @@ class AuctionsysTester(unittest.TestCase):
         self.assertEqual(winner["total_bid"], 2)
         self.assertEqual(winner["total_charge"], 1)
 
+    def test_favor_last_bidder(self):
+        self.auction.place_bid("alice", "pepsiman", 1)
+        self.auction.place_bid("bob", "pepsiman", 1)
+        # pepsiman should win with 1 money, and alice should pay
+        winner = self.auction.get_winner(discount_latter=True)
+        self.assertEqual(winner["item"], "pepsiman")
+        self.assertEqual(winner["money_owed"], {"alice": 1, "bob": 0})
+        self.assertEqual(winner["total_bid"], 2)
+        self.assertEqual(winner["total_charge"], 1)
+
     def test_distribute_cost(self):
         self.auction.place_bid("alice", "pepsiman", 5)
         self.auction.place_bid("bob", "pepsiman", 10)

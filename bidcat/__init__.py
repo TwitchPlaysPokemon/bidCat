@@ -170,7 +170,7 @@ class Auction:
             return -sum(bids.values()), self._changes_tracker.index(item)
         return sorted(self._itembids.items(), key=by_amount_and_last_update)
 
-    def get_winner(self):
+    def get_winner(self, discount_latter=False):
         """Calculated the item currently winning.
         Returns None if no bids, or a dict structured like this:
         {
@@ -209,7 +209,11 @@ class Auction:
         # Step 2: because of ceiling the prices, the sum might be too high.
         # => calculate how much was overpaid, and discount the higher, and if tied the earlier bidders
         overpaid = sum(money_owed.values()) - total_charge
-        user_iter = iter(money_owed)
+        # if discount_latter is True, actually discounts the later bidders, the oppisite as described above
+        if discount_latter:
+            user_iter = iter(reversed(money_owed))
+        else:
+            user_iter = iter(money_owed)
         for _ in range(overpaid):
             money_owed[next(user_iter)] -= 1
         # return all results as dict
